@@ -1,2 +1,2 @@
-# internal-logistics-model2
+# gurobi-InternalLogistics-model2
 İlk Modelin devamı niteliğinde farklı performans metriğ
