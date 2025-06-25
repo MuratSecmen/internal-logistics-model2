@@ -108,7 +108,7 @@ for i in N:
             for k in K:
                 for r in R:
                     model.addConstr(ta[j,k,r] >= td[i,k,r] + dist[(i,j)] - M_time*(1-x[i,j,k,r]))
-                    model.addConstr(ta[j,k,r] <= td[i,k,r] + dist[(i,j)] + M_time*(1-x[i,j,k,r]))
+                    # model.addConstr(ta[j,k,r] <= td[i,k,r] + dist[(i,j)] + M_time*(1-x[i,j,k,r]))
 
 # C13 & C15 Servis ve çıkış zamanları
 for j in Nw:
