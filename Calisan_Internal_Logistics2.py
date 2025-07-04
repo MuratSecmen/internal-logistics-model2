@@ -69,7 +69,7 @@ model.setObjective(quicksum(w[p] for p in P), GRB.MINIMIZE)
 for k in K:
     for r in R:
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == quicksum(x[i,'h',k,r] for i in Nw))
-        model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == 1)
+        model.addConstr(quicksum(x['h',j,k,r] for j in Nw) <= 1)
 
 # C4 - C5: Akış koruma + tek giriş
 for j in Nw:
