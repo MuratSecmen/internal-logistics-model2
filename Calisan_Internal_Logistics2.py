@@ -14,8 +14,8 @@ def model_organize_results(var_values):
     return pd.DataFrame(rows)
 
 # 1) Veri yükleme
-# data_path = r"C:\Users\Asus\Desktop\Er\\"
-data_path = "inputs/"
+data_path = r"C:\Users\Asus\Desktop\Er\\"
+# data_path = "inputs/"
 nodes     = pd.read_excel(data_path + "nodes.xlsx")
 vehicles  = pd.read_excel(data_path + "vehicles.xlsx")
 products  = pd.read_excel(data_path + "products.xlsx")
