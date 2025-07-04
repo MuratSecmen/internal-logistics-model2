@@ -26,7 +26,9 @@ distances = pd.read_excel(data_path + "distances.xlsx")
 N    = nodes['node_id'].astype(str).tolist()
 Nw   = [n for n in N if n != 'h']
 K    = vehicles['vehicle_id'].tolist()
-q    = dict(zip(K, vehicles['capacity_m2']))
+# q    = dict(zip(K, vehicles['capacity_m2']))
+q_vehicle = dict(zip(K, vehicles['capacity_m2']))       # Araçların kapasiteleri
+q_product = dict(zip(P, products['area_m2']))           # Ürünlerin kapladığı alanlar
 P    = products['product_id'].tolist()
 orig = dict(zip(P, products['origin'].astype(str)))
 dest = dict(zip(P, products['destination'].astype(str)))
@@ -69,8 +71,8 @@ model.setObjective(quicksum(w[p] for p in P), GRB.MINIMIZE)
 for k in K:
     for r in R:
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == quicksum(x[i,'h',k,r] for i in Nw))
+        # model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == 1)
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) <= 1)
-
 # C4 - C5: Akış koruma + tek giriş
 for j in Nw:
     for k in K:
@@ -140,20 +142,28 @@ for p in P:
             # model.addConstr(w[p] >= ta[dest[p],k,r] + su[p]*f[p,k,r] - rt - M_time*(1-f[p,k,r]))
 
 # C18: Alınmayan ürünlere penaltı
+# for p in P:
+    # model.addConstr(w[p] >= 9999 * (1- quicksum(f[p,k,r] for k in K for r in R)))
+
+W = 9999
 for p in P:
-    model.addConstr(w[p] >= 9999 * (1- quicksum(f[p,k,r] for k in K for r in R)))
+    model.addConstr(w[p] >= W * (1 - quicksum(f[p,k,r] for k in K for r in R)))
+
 
 # C19: Yük değişimi ve evrimi (Big M_load) + kapasite limiti
 for j in Nw:
     for k in K:
         for r in R:
-            load_in  = quicksum(f[p,k,r] for p in P if orig[p]==j)
-            load_out = quicksum(f[p,k,r] for p in P if dest[p]==j)
+            # load_in  = quicksum(f[p,k,r] for p in P if orig[p]==j)
+            # load_out = quicksum(f[p,k,r] for p in P if dest[p]==j)
+            load_in  = quicksum(q_product[p] * f[p,k,r] for p in P if orig[p]==j)
+            load_out = quicksum(q_product[p] * f[p,k,r] for p in P if dest[p]==j)
             model.addConstr(delta[j,k,r] == load_in - load_out)
             for i in Nw:
                 model.addConstr(y[j,k,r] <=  y[i,k,r] + delta[j,k,r] + M_load*(1-x[i,j,k,r]))
                 model.addConstr(y[j,k,r] >=  y[i,k,r] + delta[j,k,r] - M_load*(1-x[i,j,k,r]))
-                model.addConstr(y[j,k,r] <= q[k])
+                # model.addConstr(y[j,k,r] <= q[k])
+                model.addConstr(y[j,k,r] <= q_vehicle[k])
 
 # 8) Gurobi parametreleri ve optimize et
 model.setParam('TimeLimit', 86400)
