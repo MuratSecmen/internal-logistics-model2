@@ -103,7 +103,8 @@ for p in P:
 
 # C9: Başlangıç zamanı
 for k in K:
-    model.addConstr(td['h',k,'r1'] == 0)
+    # model.addConstr(td['h',k,'r1'] == 0)
+    model.addConstr(td['h',k,'r1'] == 420)
 
 # C10: Rotalar arası zaman tutarlılığı
 for k in K:
