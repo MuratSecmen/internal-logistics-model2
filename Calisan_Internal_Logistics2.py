@@ -102,17 +102,9 @@ for p in P:
 
 
 # C9: Başlangıç zamanı
-# for k in K:
-    # model.addConstr(td['h',k,'r1'] == 0)
-    # model.addConstr(td['h',k,'r1'] == 420)
-    # C9: Her aracın r1 turu için 07:00 (420 dk) başlangıç zamanı
-start_time = 7 * 60    # 07:00 → 420 dakika
 for k in K:
-    model.addConstr(
-        td['h', k, 'r1'] == start_time,
-        name=f"C9_start_{k}"
-    )
-
+    # model.addConstr(td['h',k,'r1'] == 0)
+    model.addConstr(td['h',k,'r1'] == 420)
 
 # C10: Rotalar arası zaman tutarlılığı
 for k in K:
