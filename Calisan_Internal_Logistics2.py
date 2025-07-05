@@ -4,6 +4,13 @@ import re
 import os
 from datetime import datetime
 
+def format_minutes_with_day(total_minutes: int) -> str:
+    days = total_minutes // 1440
+    rem  = total_minutes % 1440
+    hh   = rem // 60
+    mm   = rem % 60
+    hhmm = f"{hh:02d}{mm:02d}"
+    return f"{days}+{hhmm}" if days > 0 else hhmm
 
 def model_organize_results(var_values):
     rows = []
@@ -201,14 +208,17 @@ if model.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
 
     ta_jkr_results_df = model_organize_results(ta.values())
     ta_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
+    ta_jkr_results_df['time_fmt'] = ta_jkr_results_df['value'].astype(int).apply(format_minutes_with_day)
     print("ta_jkr results are extracted...")
 
     td_jkr_results_df = model_organize_results(td.values())
     td_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
+    td_jkr_results_df['time_fmt'] = td_jkr_results_df['value'].astype(int).apply(format_minutes_with_day)
     print("td_jkr results are extracted...")
 
     ts_jkr_results_df = model_organize_results(ts.values())
     ts_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
+    ts_jkr_results_df['time_fmt'] = ts_jkr_results_df['value'].astype(int).apply(format_minutes_with_day)
     print("ts_jkr results are extracted...")
 
     delta_jkr_results_df = model_organize_results(delta.values())
