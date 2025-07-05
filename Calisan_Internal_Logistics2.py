@@ -91,7 +91,7 @@ for p in P:
 for p in P:
     model.addConstr(quicksum(f[p,k,r] for k in K for r in R) <= 1)
 
-model.addConstr(f['P43',k,r] == 1)
+# model.addConstr(f['P43',k,r] == 1)
 
 
 # C9: Başlangıç zamanı
