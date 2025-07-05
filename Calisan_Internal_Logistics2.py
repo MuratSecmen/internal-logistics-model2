@@ -27,9 +27,9 @@ N    = nodes['node_id'].astype(str).tolist()
 Nw   = [n for n in N if n != 'h']
 K    = vehicles['vehicle_id'].tolist()
 # q    = dict(zip(K, vehicles['capacity_m2']))
-q_vehicle = dict(zip(K, vehicles['capacity_m2']))       # Araçların kapasiteleri
-q_product = dict(zip(P, products['area_m2']))           # Ürünlerin kapladığı alanlar
+q_vehicle = dict(zip(K, vehicles['capacity_m2']))       # Araçların kapasiteleri         
 P    = products['product_id'].tolist()
+q_product = dict(zip(P, products['area_m2']))           # Ürünlerin kapladığı alanlar
 orig = dict(zip(P, products['origin'].astype(str)))
 dest = dict(zip(P, products['destination'].astype(str)))
 ep   = dict(zip(P, products['ready_time']))
