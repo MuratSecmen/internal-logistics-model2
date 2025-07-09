@@ -80,6 +80,15 @@ for k in K:
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == quicksum(x[i,'h',k,r] for i in Nw))
         # model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == 1)
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) <= 1)
+
+# C3': Her araç ve rota için, depodan (home) yapılan çıkış sayısı, o araca ve rotaya atanan ürün sayısını aşamaz.
+for k in K:
+    for r in R:
+        model.addConstr(
+            quicksum(x["h", j, k, r] for j in Nw) <= quicksum(f[p, k, r] for p in P),
+            name=f"C3prime_BaseDeparture_k{k}_r{r}"
+        )
+       
 # C4 - C5: Akış koruma + tek giriş
 for j in Nw:
     for k in K:
