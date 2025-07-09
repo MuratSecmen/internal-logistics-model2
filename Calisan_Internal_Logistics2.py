@@ -98,8 +98,6 @@ for p in P:
 for p in P:
     model.addConstr(quicksum(f[p,k,r] for k in K for r in R) <= 1)
 
-# model.addConstr(f['P43',k,r] == 1)
-
 
 # C9: Başlangıç zamanı
 for k in K:
@@ -140,6 +138,15 @@ for p in P:
     for k in K:
         for r in R:
             model.addConstr(ta[dest[p],k,r] >= td[orig[p],k,r] - M_time*(1-f[p,k,r]))
+
+# C16': Her ürünün hedef düğüm varış zamanı, çıkış düğüm çıkış zamanından büyük veya eşit olacak
+home_node = "h"
+for k in K:
+    for r in R:
+        model.addConstr(
+            ta[home_node, k, r] >= td[home_node, k, r] + eps,
+            name=f"C16prime_home_k{k}_r{r}"
+        )
 
 # C17: Ürün bekleme süresi
 for p in P:
