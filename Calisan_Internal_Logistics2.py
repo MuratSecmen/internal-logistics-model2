@@ -226,7 +226,7 @@ if model.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     delta_jkr_results_df.columns = ['var_name', 'product', 'vehicle', 'route', 'value']
     print("delta_jkr results are extracted...")
 
-
+a
     optimization_results_df = pd.DataFrame(
         columns=['model_obj_value', 'model_obj_bound', 'gap', 'gurobi_time'])
 
