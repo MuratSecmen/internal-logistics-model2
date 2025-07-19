@@ -21,7 +21,7 @@ def model_organize_results(var_values):
     return pd.DataFrame(rows)
 
 # 1) Veri yükleme
-data_path = r"C:\Users\Asus\Desktop\Er - Kopya\\"
+data_path = r"C:\Users\Asus\Desktop\Er\\"
 # data_path = "inputs/"
 nodes     = pd.read_excel(data_path + "nodes.xlsx")
 vehicles  = pd.read_excel(data_path + "vehicles.xlsx")
@@ -201,10 +201,10 @@ for j in Nw:
 
 # 8) Gurobi parametreleri ve optimize et
 model.setParam('TimeLimit', 86400)
-model.setParam('MIPGap', 0.05)
+model.setParam('MIPGap', 0.03)
 model.setParam('LogFile', 'gurobi_log.txt')
 model.setParam('Presolve', 2)
-#model.setParam('NoRelHeurTime', 600)
+model.setParam('NoRelHeurTime', 600)
 model.setParam('MIPFocus', 1)
 
 model.optimize()
