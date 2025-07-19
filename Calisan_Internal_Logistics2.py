@@ -21,7 +21,7 @@ def model_organize_results(var_values):
     return pd.DataFrame(rows)
 
 # 1) Veri yükleme
-data_path = r"C:\Users\Asus\Desktop\Er\\"
+data_path = r"C:\Users\Asus\Desktop\Er - Kopya\\"
 # data_path = "inputs/"
 nodes     = pd.read_excel(data_path + "nodes.xlsx")
 vehicles  = pd.read_excel(data_path + "vehicles.xlsx")
@@ -50,7 +50,7 @@ R    = ['r1','r2','r3']
 # 3) Big M’ler
 M_time = 900
 M_load = 60
-eps    = 1e-3
+eps_wait_time = 0
 
 # 4) Model oluştur
 model = Model("InternalLogistics")
@@ -88,8 +88,18 @@ for k in K:
             quicksum(x["h", j, k, r] for j in Nw) <= quicksum(f[p, k, r] for p in P),
             name=f"C3prime_BaseDeparture_k{k}_r{r}"
         )
-       
-# C4 - C5: Akış koruma + tek giriş
+
+# C3'': Her müşteri, araç ve rota için: müşteriden çıkan akış, müşterinin origin veya destination olduğu atanan ürünlerle sınırlıdır.
+# Assuming Nw is defined as customer nodes (e.g., Nw = [node for node in N if node != 'h'])
+for j in Nw:
+    for k in K:
+        for r in R:
+            model.addConstr(
+                quicksum(x[i, j, k, r] for i in N if i != j) <= quicksum(f[p, k, r] for p in P if orig[p] == j or dest[p] == j),
+                name=f"C3_Prime_Prime_j{j}_k{k}_r{r}"
+            )
+
+# C4 - C5: Akış koruma + tek giriş0
 for j in Nw:
     for k in K:
         for r in R:
@@ -153,7 +163,7 @@ home_node = "h"
 for k in K:
     for r in R:
         model.addConstr(
-            ta[home_node, k, r] >= td[home_node, k, r] + eps,
+            ta[home_node, k, r] >= td[home_node, k, r] + eps_wait_time,
             name=f"C16prime_home_k{k}_r{r}"
         )
 
