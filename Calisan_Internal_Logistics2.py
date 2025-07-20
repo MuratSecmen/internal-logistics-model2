@@ -47,6 +47,7 @@ dist = {(str(r['from_node']), str(r['to_node'])): r['duration_min']
 # R    = ['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10']
 # R    = ['r1','r2','r3']
 R    = ['r1','r2','r3','r4','r5','r6','r7','r8']
+# R    = ['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10','r11','r12','r13','r14','r15,'r16','r17','r18','r19','r20']
 
 # 3) Big M’ler
 M_time = 900
@@ -205,9 +206,10 @@ model.setParam('TimeLimit', 600)
 model.setParam('MIPGap', 0.03)
 model.setParam('LogFile', 'gurobi_log.txt')
 # model.setParam('Presolve', 2)
-# model.setParam('NoRelHeurTime', 600)
-model.setParam('MIPFocus', 3)
-model.setParam('Cuts', 3)
+# model.setParam('NoRelHeurTime', 360)
+model.setParam('MIPFocus', 1)
+# model.setParam('MIPFocus', 3)
+# model.setParam('Cuts', 3)
 
 model.optimize()
 
@@ -285,7 +287,7 @@ elif model.status == GRB.INFEASIBLE:
     model.write("infeasible.ilp")
     print("Go check infeasible_model.ilp file")
 
-    model.write(data_path + "model.ilp")
+    # model.write(data_path + "model.ilp")
 
     print("IIS raporu kaydedildi:", data_path + "model.ilp")
 else:
