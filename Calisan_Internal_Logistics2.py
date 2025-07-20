@@ -45,7 +45,8 @@ su   = dict(zip(P, products['unload_time']))
 dist = {(str(r['from_node']), str(r['to_node'])): r['duration_min']
         for _, r in distances.iterrows()}
 # R    = ['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10']
-R    = ['r1','r2','r3']
+# R    = ['r1','r2','r3']
+R    = ['r1','r2','r3','r4','r5','r6','r7','r8']
 
 # 3) Big M’ler
 M_time = 900
@@ -134,8 +135,8 @@ for i in N:
         if i!=j and (i,j) in dist:
             for k in K:
                 for r in R:
-                    model.addConstr(ta[j,k,r] >= td[i,k,r] + dist[(i,j)] - M_time*(1-x[i,j,k,r]))
-                    # model.addConstr(ta[j,k,r] <= td[i,k,r] + dist[(i,j)] + M_time*(1-x[i,j,k,r]))
+                    model.addConstr(ta[j,k,r] >= td[i,k,r] + dist[(i,j)]*x[i,j,k,r] - M_time*(1-x[i,j,k,r]))
+                    # model.addConstr(ta[j,k,r] <= td[i,k,r] + dist[(i,j)]*x[i,j,k,r] + M_time*(1-x[i,j,k,r]))
 
 # C13 & C15 Servis ve çıkış zamanları
 for j in Nw:
@@ -200,12 +201,13 @@ for j in Nw:
                 model.addConstr(y[j,k,r] <= q_vehicle[k])
 
 # 8) Gurobi parametreleri ve optimize et
-model.setParam('TimeLimit', 86400)
+model.setParam('TimeLimit', 600)
 model.setParam('MIPGap', 0.03)
 model.setParam('LogFile', 'gurobi_log.txt')
-model.setParam('Presolve', 2)
-model.setParam('NoRelHeurTime', 600)
-model.setParam('MIPFocus', 1)
+# model.setParam('Presolve', 2)
+# model.setParam('NoRelHeurTime', 600)
+model.setParam('MIPFocus', 3)
+model.setParam('Cuts', 3)
 
 model.optimize()
 
@@ -283,7 +285,7 @@ elif model.status == GRB.INFEASIBLE:
     model.write("infeasible.ilp")
     print("Go check infeasible_model.ilp file")
 
-    # model.write(data_path + "model.ilp")
+    model.write(data_path + "model.ilp")
 
     print("IIS raporu kaydedildi:", data_path + "model.ilp")
 else:
