@@ -84,7 +84,7 @@ for k in K:
         # model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == 1)
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) <= 1)
 
-# C55: Her araç ve rota için, depodan (home) yapılan çıkış sayısı, o araca ve rotaya atanan ürün sayısını aşamaz.
+# C5: Her araç ve rota için, depodan (home) yapılan çıkış sayısı, o araca ve rotaya atanan ürün sayısını aşamaz.
 for k in K:
     for r in R:
         model.addConstr(
@@ -214,7 +214,7 @@ for i in Nw:
                 model.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] + M_load * (1 - x[i, j, k, r]), name=f"C23_{i}_{j}_{k}_{r}")
                 model.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_load * (1 - x[i, j, k, r]), name=f"C24_{i}_{j}_{k}_{r}")
 
-# C25: Vehicle load does not exceed capacity
+# C25: Aracın yükü kapasitesini aşamaz
 for j in Nw:
     for k in K:
         for r in R:
