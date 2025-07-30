@@ -26,7 +26,7 @@ data_path = r"C:\Users\Asus\Desktop\Er\\"
 nodes     = pd.read_excel(data_path + "nodes.xlsx")
 vehicles  = pd.read_excel(data_path + "vehicles.xlsx")
 products  = pd.read_excel(data_path + "products.xlsx")
-products = products.head(5)
+products = products.head(100)
 distances = pd.read_excel(data_path + "distances.xlsx")
 
 # 2) Setler ve parametreler
@@ -211,7 +211,7 @@ for i in Nw:
     for j in Nw:
         for k in K:
             for r in R:
-                model.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] + M_load * (1 - x[i, j, k, r]), name=f"C23_{i}_{j}_{k}_{r}")
+                model.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_load * (1 - x[i, j, k, r]), name=f"C23_{i}_{j}_{k}_{r}")
                 model.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_load * (1 - x[i, j, k, r]), name=f"C24_{i}_{j}_{k}_{r}")
 
 # C25: Aracın yükü kapasitesini aşamaz
