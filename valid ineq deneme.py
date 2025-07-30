@@ -315,4 +315,4 @@ elif model.status == GRB.INFEASIBLE:
 
     print("IIS raporu kaydedildi:", data_path + "infeasible.ilp")
 else:
-    print(f"Çözüm bulunamadı. Status = {model.status}")
+    print(f"Çözüm bulunamadı. Status = {model.status}")u kısıtları imngilzic eacıkla

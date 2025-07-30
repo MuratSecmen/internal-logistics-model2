@@ -84,7 +84,7 @@ for k in K:
         # model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == 1)
         model.addConstr(quicksum(x['h',j,k,r] for j in Nw) <= 1)
 
-# C5: Her araç ve rota için, depodan (home) yapılan çıkış sayısı, o araca ve rotaya atanan ürün sayısını aşamaz.
+# C55: Her araç ve rota için, depodan (home) yapılan çıkış sayısı, o araca ve rotaya atanan ürün sayısını aşamaz.
 for k in K:
     for r in R:
         model.addConstr(
