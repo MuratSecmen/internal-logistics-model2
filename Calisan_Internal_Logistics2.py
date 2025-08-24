@@ -294,14 +294,12 @@ for j in Nw:
         for r in R:
             model.addConstr(y[j, k, r] <= q_vehicle[k], name=f"C25_capacity_{j}_{k}_{r}")
 
-# Define h (e.g., the depot node)
 h = 'h'
-
 # C26: z[k,r] = sum_{j∈Nw} x[h,j,k,r]
-for k in K:
-    for r in R:
-        model.addConstrs(z[k, r] == gp.quicksum(X(h, j, k, r) for j in Nw), name="C26_z_link"
-        )
+model.addConstrs(
+    ((z[k, r] == gp.quicksum(v for v in x.select(h, '*', k, r))) for k in K for r in R),
+    name="C26_z_link"
+)
 
 # C27: z_{k,r} ≥ z_{k,r+1} (r = 1..|R|-1)
 for k in K:
@@ -321,7 +319,7 @@ for k in K:
                 if i == j:
                     continue
                 model.addConstr(
-                    u[j, k, r] >= u[i, k, r] + 1 - Umax * (1 - X(i, j, k, r)),
+                    u[j, k, r] >= u[i, k, r] + 1 - Umax * (1 - x.get((i, j, k, r), 0.0)),
                     name=f"C28_MTZ[{i}->{j},{k},{r}]"
                 )
 
