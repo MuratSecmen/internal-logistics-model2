@@ -12807,3 +12807,53 @@ MIPGap  0.03
 MIPFocus  3
 Cuts  3
 
+
+Gurobi 12.0.0 (win64) logging started Thu Aug  7 13:41:53 2025
+
+Set parameter LogFile to value "gurobi_log.txt"
+Set parameter Presolve to value 2
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.03
+Presolve  2
+
+Optimize a model with 15771 rows, 3550 columns and 64409 nonzeros
+Model fingerprint: 0x4ed44b3b
+Variable types: 800 continuous, 2750 integer (2750 binary)
+Coefficient statistics:
+  Matrix range     [6e-02, 9e+02]
+  Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+03]
+Presolve removed 7377 rows and 281 columns
+Presolve time: 0.10s
+Presolved: 8394 rows, 3269 columns, 50977 nonzeros
+Variable types: 669 continuous, 2600 integer (2600 binary)
+Root relaxation presolved: 8394 rows, 3269 columns, 50977 nonzeros
+
+
+Root relaxation: objective 1.270000e+02, 1404 iterations, 0.07 seconds (0.08 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0  127.00000    0   75          -  127.00000      -     -    0s
+     0     0  127.00000    0  168          -  127.00000      -     -    1s
+     0     0  127.00000    0  198          -  127.00000      -     -    1s
+     0     0  127.00000    0   74          -  127.00000      -     -    2s
+     0     0  127.00000    0   74          -  127.00000      -     -    2s
+     0     0  127.00000    0   81          -  127.00000      -     -    2s
+     0     0  127.00000    0   80          -  127.00000      -     -    2s
+     0     0  127.00000    0   85          -  127.00000      -     -    3s
+     0     0  127.00000    0   81          -  127.00000      -     -    3s
+     0     0  127.00000    0   70          -  127.00000      -     -    4s
+     0     0  127.00000    0  125          -  127.00000      -     -    4s
+     0     0  127.00000    0   90          -  127.00000      -     -    4s
+     0     0  127.00000    0   70          -  127.00000      -     -    5s
+     0     2  127.00000    0   70          -  127.00000      -     -    7s
+  2021  2486  127.00000   56   89          -  127.00000      -  92.2   10s

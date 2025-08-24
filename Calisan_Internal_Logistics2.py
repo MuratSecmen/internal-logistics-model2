@@ -1,313 +1,430 @@
 import pandas as pd
 from gurobipy import Model, GRB, quicksum
-import re
-import os
-from datetime import datetime
+import re, os
+import gurobipy as gp
+from datetime import datetime, time
 
-def format_minutes_with_day(total_minutes: int) -> str:
-    days = total_minutes // 1440
-    rem  = total_minutes % 1440
-    hh   = rem // 60
-    mm   = rem % 60
-    hhmm = f"{hh:02d}{mm:02d}"
-    return f"{days}+{hhmm}" if days > 0 else hhmm
+# ---------------------------- yardımcılar ----------------------------
+def ready_to_min(v):
+    """Timestamp/'HH:MM'/'YYYY-MM-DD HH:MM'/time/sayı -> dakika (int)"""
+    if pd.isna(v): return 0
+    if isinstance(v, (pd.Timestamp, datetime)): return int(v.hour)*60 + int(v.minute)
+    if isinstance(v, time): return int(v.hour)*60 + int(v.minute)
+    if isinstance(v, (int, float)) and not isinstance(v, bool): return int(v)
+    s = str(v).strip()
+    dt = pd.to_datetime(s, errors='coerce')
+    if pd.notna(dt): return int(dt.hour)*60 + int(dt.minute)
+    if ":" in s:
+        pr = s.split(":")
+        return int(pr[0])*60 + int(pr[1])
+    return int(float(s))
 
-def model_organize_results(var_values):
-    rows = []
+def fmt_hhmm(total_min):
+    total_min = int(round(total_min)) if total_min is not None else None
+    if total_min is None: return ''
+    if total_min < 0: return f"-{fmt_hhmm(-total_min)}"
+    hh = (total_min // 60) % 24
+    mm = total_min % 60
+    return f"{hh:02d}:{mm:02d}"
+
+def tidy(var_values):
+    rows=[]
     for v in var_values:
-        current_var = re.split(r"\[|,|]", v.varName)[:-1]
-        current_var.append(round(v.X, 4))
-        rows.append(current_var)
+        parts = re.split(r"\[|,|]", v.varName)[:-1]
+        val   = round(v.X,4) if v.X is not None else None
+        rows.append(parts+[val])
     return pd.DataFrame(rows)
 
-# 1) Veri yükleme
+# ---------------------------- 1) veri ----------------------------
 data_path = r"C:\Users\Asus\Desktop\Er\\"
-# data_path = "inputs/"
+
 nodes     = pd.read_excel(data_path + "nodes.xlsx")
 vehicles  = pd.read_excel(data_path + "vehicles.xlsx")
-products  = pd.read_excel(data_path + "products.xlsx")
-products = products.head(100)
-distances = pd.read_excel(data_path + "distances.xlsx")
+products  = pd.read_excel(data_path + "products.xlsx").head(50)
 
-# 2) Setler ve parametreler
-N    = nodes['node_id'].astype(str).tolist()
-Nw   = [n for n in N if n != 'h']
-K    = vehicles['vehicle_id'].tolist()
-# q    = dict(zip(K, vehicles['capacity_m2']))
-q_vehicle = dict(zip(K, vehicles['capacity_m2']))      
-P    = products['product_id'].tolist()
+def _read_dist(path, val_col):
+    df = pd.read_excel(path, sheet_name=0)
+    need = ['from_node','to_node', val_col]
+    miss = [c for c in need if c not in df.columns]
+    if miss:
+        raise KeyError(f"{os.path.basename(path)} dosyasında eksik sütun(lar): {miss}")
+    df['from_node'] = df['from_node'].astype(str).str.strip()
+    df['to_node']   = df['to_node'].astype(str).str.strip()
+    df = df.dropna(subset=['from_node','to_node', val_col])
+    df = df[df['from_node'] != df['to_node']]
+    df[val_col] = pd.to_numeric(df[val_col], errors='coerce')
+    df = df.dropna(subset=[val_col])
+    return {(r['from_node'], r['to_node']): float(r[val_col]) for _, r in df.iterrows()}
+
+dist_min   = _read_dist(data_path + "distances - dakika.xlsx", "duration_min")
+dist_metre = _read_dist(data_path + "distances - metre.xlsx",  "duration_metre")
+
+# ---------------------------- 2) setler/paramlar ----------------------------
+nodes['node_id'] = nodes['node_id'].astype(str).str.strip()
+N  = nodes['node_id'].dropna().drop_duplicates().tolist()
+Nw = [n for n in N if n != 'h']  # depo hariç
+
+vehicles['vehicle_id'] = vehicles['vehicle_id'].astype(str).str.strip()
+vehicles = vehicles.dropna(subset=['vehicle_id']).drop_duplicates('vehicle_id', keep='first')
+K = vehicles['vehicle_id'].tolist()
+q_vehicle = dict(zip(K, vehicles['capacity_m2']))
+
+products['product_id']  = products['product_id'].astype(str).str.strip()
+products['origin']      = products['origin'].astype(str).str.strip()
+products['destination'] = products['destination'].astype(str).str.strip()
+products = products.dropna(subset=['product_id']).drop_duplicates('product_id', keep='first')
+
+P         = products['product_id'].tolist()
 q_product = dict(zip(P, products['area_m2']))
-orig = dict(zip(P, products['origin'].astype(str)))
-dest = dict(zip(P, products['destination'].astype(str)))
-ep   = dict(zip(P, products['ready_time']))
-sl   = dict(zip(P, products['load_time']))
-su   = dict(zip(P, products['unload_time']))
-dist = {(str(r['from_node']), str(r['to_node'])): r['duration_min']
-        for _, r in distances.iterrows()}
-# R    = ['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10']
-# R    = ['r1','r2']
-R    = ['r1','r2','r3']
-# R    = ['r1','r2','r3','r4','r5','r6','r7','r8']
-# R      = ['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10','r11','r12','r13','r14','r15','r16','r17','r18','r19','r20']
+orig      = dict(zip(P, products['origin']))
+dest      = dict(zip(P, products['destination']))
+ep_min    = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))  # dakika
+sl        = dict(zip(P, products['load_time']))
+su        = dict(zip(P, products['unload_time']))
 
-# 3) Big M’ler
-M_time = 900
-M_load = 60
-eps_wait_time = 0
+max_routes = min(len(P)//max(1,len(K)) + 1, 5)  # Rota sayısını azalttık, OOM önlemek için
+R = [f"r{i}" for i in range(1, max_routes+1)]
 
-# 4) Model oluştur
+# Big-M ve eps
+M_time = 900.0
+M_load = 60.0
+eps_route_gap = 1e-3
+
+# ---------------------------- 3) model ----------------------------
 model = Model("InternalLogistics")
 
-# 5) Karar değişkenleri
-# x   = model.addVars(N, N, K, R, vtype=GRB.BINARY,    name="x")
-x = model.addVars(
-    ((i, j, k, r) for i in N for j in N if not (i == "h" and j == "h") for k in K for r in R),
-    vtype=GRB.BINARY,
-    name="x"
-)
-f   = model.addVars(P, K, R, vtype=GRB.BINARY,    name="f")
-w   = model.addVars(P, vtype=GRB.CONTINUOUS, name="w")
-y   = model.addVars(N, K, R, vtype=GRB.CONTINUOUS, name="y")
-ta  = model.addVars(N, K, R, vtype=GRB.CONTINUOUS, name="ta")
-td  = model.addVars(N, K, R, vtype=GRB.CONTINUOUS, name="td")
+# arc_exists'i dist_metre'ye göre tanımla (sparse için)
+def arc_exists(i, j, k, r):
+    return (i != j) and not (i == 'h' and j == 'h') and ((i, j) in dist_metre or (i, j) in dist_min)
+
+# x[i,j,k,r] sparse tanımla
+arcs = [(i, j, k, r) for i in N for j in N for k in K for r in R if arc_exists(i, j, k, r)]
+x = model.addVars(arcs, vtype=GRB.BINARY, name="x")
+
+# rota-aktif: z[k,r]
+z = model.addVars(K, R, vtype=GRB.BINARY, name="z")
+
+# ürün atama
+f   = model.addVars(P, K, R, vtype=GRB.BINARY, name="f")
+
+# zamanlar/yük
+y   = model.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="y")
+ta  = model.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="ta")
+td  = model.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="td")
 ts  = model.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, name="ts")
 delta = model.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")
 
-# 6) Amaç: Toplam bekleme süresi minimize
-model.setObjective(quicksum(w[p] for p in P), GRB.MINIMIZE)
+# MTZ sıralama: u[j,k,r] ∈ [0, Umax]
+Umax = max(1, len(Nw))
+u = model.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=Umax, name="u")
 
-# Kısıtlar
-# C3 - C4: Araç depot'tan çıkarsa geri döner ve en fazla 1 çıkış olur
+# bekleme değişkeni
+w = model.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
+
+# ---------------------------- 4) amaç (MESAFE, metre) ----------------------------
+obj = quicksum(dist_metre.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs)
+model.setObjective(obj, GRB.MINIMIZE)
+
+# ---------------------------- 5) yardımcı ----------------------------
+def X(i, j, k, r):
+    return x.get((i, j, k, r), 0.0)
+
+model.addConstr(quicksum(dist_metre.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs) >= 120)
+model.addConstr(quicksum(dist_metre.get((j,i), 0.0) * X(j,i,k,r) for (i,j,k,r) in arcs) >= 70)
+
+# ---------------------------- 6) kısıtlar ----------------------------
+# C3: Depo akış eşitliği
 for k in K:
     for r in R:
-        model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == quicksum(x[i,'h',k,r] for i in Nw))
-        # model.addConstr(quicksum(x['h',j,k,r] for j in Nw) == 1)
-        model.addConstr(quicksum(x['h',j,k,r] for j in Nw) <= 1)
+        out_h = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
+        in_h  = quicksum(x[i, 'h', k, r] for i in Nw if (i, 'h', k, r) in x)
+        model.addConstr(out_h == in_h, name=f"C3_flow_home_{k}_{r}")
 
-# C5: Her araç ve rota için, depodan (home) yapılan çıkış sayısı, o araca ve rotaya atanan ürün sayısını aşamaz.
+# C4: Depodan en fazla 1 çıkış
 for k in K:
     for r in R:
-        model.addConstr(
-            quicksum(x["h", j, k, r] for j in Nw) <= quicksum(f[p, k, r] for p in P),
-            name=f"C5_BaseDeparture_k{k}_r{r}"
-        )
+        out_h = quicksum(x["h", j, k, r] for j in Nw if ("h", j, k, r) in x)
+        model.addConstr(out_h <= 1, name=f"C4_one_depart_{k}_{r}")
 
-# C6: Her müşteri, araç ve rota için: müşteriden çıkan akış, müşterinin origin veya destination olduğu atanan ürünlerle sınırlıdır.
-# Assuming Nw is defined as customer nodes (e.g., Nw = [node for node in N if node != 'h'])
+# C5: Depodan çıkış atanan ürün sayısını aşamaz
+model.addConstrs(
+    (gp.quicksum(x[i, j, k, r] for i in N if (i, j, k, r) in x)
+     <= gp.quicksum(f[p, k, r] for p in P)
+     for j in Nw for k in K for r in R),
+    name="C5_leave_only_if_assigned"
+)
+
+# C6: j’den çıkan akış, j’nin orig/dest olduğu atamalarla sınırlı
+for j in Nw:  # Eksik for j eklendi, anlamsız yeri düzelttik
+    for k in K:
+        for r in R:
+            lhs = quicksum(x[i, j, k, r] for i in N if i != j and (i, j, k, r) in x)
+            rhs = quicksum(f[p, k, r] for p in P if orig[p] == j or dest[p] == j)
+            model.addConstr(lhs <= rhs, name=f"C6_restrict_by_od_{j}_{k}_{r}")
+
+# C7–C8: Akış korunumu + tek giriş
+for j in Nw:
+    for k in K:
+        for r in R:
+            inflow  = quicksum(x[i, j, k, r] for i in N if i != j and (i, j, k, r) in x)
+            outflow = quicksum(x[j, i, k, r] for i in N if i != j and (j, i, k, r) in x)
+            model.addConstr(inflow == outflow, name=f"C7_flow_keep_{j}_{k}_{r}")
+            model.addConstr(inflow <= 1,       name=f"C8_one_in_{j}_{k}_{r}")
+
+# C9: Her ürün tam olarak bir araca-ve-rotaya atanır
+for p in P:
+    model.addConstr(quicksum(f[p, k, r] for k in K for r in R) == 1, name=f"C9_assign_eq1_{p}")
+
+# C10–C11: Atandıysa origin ve destination ziyaret
+for p in P:
+    for k in K:
+        for r in R:
+            org = orig[p]; de = dest[p]
+            lhs_o = quicksum(x[i, org, k, r] for i in N if i != org and (i, org, k, r) in x)
+            lhs_d = quicksum(x[i, de,  k, r] for i in N if i != de  and (i, de,  k, r) in x)
+            model.addConstr(lhs_o >= f[p, k, r], name=f"C10_visit_origin_p{p}_{k}_{r}")
+            model.addConstr(lhs_d >= f[p, k, r], name=f"C11_visit_dest_p{p}_{k}_{r}")
+
+# C12: İlk turun depo çıkış zamanı = 07:00 (420 dk)
+for k in K:
+    model.addConstr(td['h', k, 'r1'] == 420, name=f"C12_home_depart_0700_{k}")
+
+# C13: Rotalar arası zaman tutarlılığı (r>1)
+for k in K:
+    for idx in range(1, len(R)):
+        r_prev, r_now = R[idx-1], R[idx]
+        model.addConstr(td['h', k, r_now] >= ta['h', k, r_prev] + eps_route_gap,
+                        name=f"C13_next_route_after_prev_{k}_{r_now}")
+
+# C14: Zaman tutarlılığı — dist_min (dakika)
+for (i, j), tmin in dist_min.items():
+    if i == j:
+        continue
+    for k in K:
+        for r in R:
+            if (i, j, k, r) in x:
+                model.addConstr(
+                    ta[j, k, r] >= td[i, k, r] + tmin * x[i, j, k, r] - M_time * (1 - x[i, j, k, r]),
+                    name=f"C14_time_{i}_{j}_{k}_{r}"
+                )
+
+# C15: Servis (boşaltma)
 for j in Nw:
     for k in K:
         for r in R:
             model.addConstr(
-                quicksum(x[i, j, k, r] for i in N if i != j) <= quicksum(f[p, k, r] for p in P if orig[p] == j or dest[p] == j),
-                name=f"C6_j{j}_k{k}_r{r}"
+                ts[j, k, r] >= ta[j, k, r] + quicksum(su[p] * f[p, k, r] for p in P if dest[p] == j),
+                name=f"C15_service_unload_{j}_{k}_{r}"
             )
 
-# C7 - C8: Akış koruma + tek giriş
+# C16: Ürün hazır edilmeden servis (origin) başlamaz
+for p in P:
+    rt = ep_min[p]; hnode = orig[p]
+    for k in K:
+        for r in R:
+            if hnode in Nw:
+                model.addConstr(ts[hnode, k, r] >= rt * f[p, k, r], name=f"C16_ready_{p}_{k}_{r}")
+
+# C17: Yükleme sonrası ayrılma
 for j in Nw:
     for k in K:
         for r in R:
-            model.addConstr(quicksum(x[i,j,k,r] for i in N if i!=j) <= quicksum(x[j,i,k,r] for i in N if i!=j))
-            model.addConstr(quicksum(x[i,j,k,r] for i in N if i!=j) <= 1)
+            model.addConstr(
+                td[j, k, r] >= ts[j, k, r] + quicksum(sl[p] * f[p, k, r] for p in P if orig[p] == j),
+                name=f"C17_depart_after_load_{j}_{k}_{r}"
+            )
 
-# C9: Her ürün en fazla bir araca ve rotaya atanır
-for p in P:
-    model.addConstr(quicksum(f[p,k,r] for k in K for r in R) <= 1)
-
-# C10 - C11: Ürün atanmışsa origin/destination’u ziyaret et
+# C18: Önce yüklenir sonra teslim edilir
 for p in P:
     for k in K:
         for r in R:
-            model.addConstr(quicksum(x[i, orig[p], k, r] for i in N if i!=orig[p]) >= f[p,k,r])
-            model.addConstr(quicksum(x[i, dest[p], k, r] for i in N if i!=dest[p]) >= f[p,k,r])
+            model.addConstr(
+                ta[dest[p], k, r] >= td[orig[p], k, r] - M_time * (1 - f[p, k, r]),
+                name=f"C18_origin_before_dest_{p}_{k}_{r}"
+            )
 
-# C12: Başlangıç zamanı
-for k in K:
-    # model.addConstr(td['h',k,'r1'] == 0)
-    model.addConstr(td['h',k,'r1'] == 420)
-
-# C13: Rotalar arası zaman tutarlılığı
-for k in K:
-    for idx in range(1, len(R)):
-        model.addConstr(td['h',k,R[idx]] >= ta['h',k,R[idx-1]])
-
-# C14: Zaman tutarlılığı (i->j hareketi)
-for i in N:
-    for j in N:
-        if i!=j and (i,j) in dist:
-            for k in K:
-                for r in R:
-                    model.addConstr(ta[j,k,r] >= td[i,k,r] + dist[(i,j)]*x[i,j,k,r] - M_time*(1-x[i,j,k,r]))
-                    # model.addConstr(ta[j,k,r] <= td[i,k,r] + dist[(i,j)]*x[i,j,k,r] + M_time*(1-x[i,j,k,r]))
-
-# C15 Servis (Yük Boşaltma) zamanları
-for j in Nw:
-    for k in K:
-        for r in R:
-            model.addConstr(ts[j,k,r] >= ta[j,k,r] + quicksum(su[p]*f[p,k,r] for p in P if dest[p]==j))            
-
-# C16 Servis zamanları (Ürün hazır edilmeden servis başlayamaz)
-for p in P:
-    rt = int(ep[p].split(":")[0])*60 + int(ep[p].split(":")[1])
-    h  = orig[p]
-    for k in K:
-        for r in R:
-            model.addConstr(ts[h,k,r] >= rt * f[p,k,r])
-
-# C17 Çıkış (Yükleme sonrası istasyondan ayrılma) zamanları
-for j in Nw:
-    for k in K:
-        for r in R:
-            model.addConstr(td[j,k,r] >= ts[j,k,r] + quicksum(sl[p]*f[p,k,r] for p in P if orig[p]==j))
-
-# C18: Ürün önce yüklenir sonra teslim edilir (strict)
-for p in P:
-    for k in K:
-        for r in R:
-            model.addConstr(ta[dest[p],k,r] >= td[orig[p],k,r] - M_time*(1-f[p,k,r]))
-
-# C19: Her ürünün kaynak düğüm varış zamanı, çıkış düğüm çıkış zamanından büyük veya eşit olacak
-home_node = "h"
+# C19: Depo zaman ilişkisi
 for k in K:
     for r in R:
-        model.addConstr(
-            ta[home_node, k, r] >= td[home_node, k, r] + eps_wait_time,
-            name=f"C19_home_k{k}_r{r}"
-        )
+        model.addConstr(ta['h', k, r] >= td['h', k, r], name=f"C19_home_time_{k}_{r}")
 
-# C20: Ürün bekleme süresi
+# C20: Bekleme alt sınırı (delivery - ready)
 for p in P:
-    rt = int(ep[p].split(":")[0])*60 + int(ep[p].split(":")[1])
+    rt = ep_min[p]
     for k in K:
         for r in R:
-            model.addConstr(w[p] >= ta[dest[p],k,r] - rt - M_time*(1-f[p,k,r]))
-            # model.addConstr(w[p] >= ta[dest[p],k,r] + su[p]*f[p,k,r] - rt - M_time*(1-f[p,k,r]))
+            model.addConstr(
+                w[p] >= ta[dest[p], k, r] - rt - M_time * (1 - f[p, k, r]),
+                name=f"C20_wait_lb_{p}_{k}_{r}"
+            )
 
-# C21: Alınmayan ürünlere penaltı
-# for p in P:
-    # model.addConstr(w[p] >= 9999 * (1- quicksum(f[p,k,r] for k in K for r in R)))
+#  C21: Alınmayan ürünlere penaltı
+#  W = 9999
+#  for p in P:
+#      w[p]>= model.addConstr(W * (1 - quicksum(f[p,k,r] for k in K for r in R)),
+#      name=f"C21_penalty_{p}"
+#        )
 
-W = 9999
-for p in P:
-    model.addConstr(w[p] >= W * (1 - quicksum(f[p,k,r] for k in K for r in R)))
-
-
-# C22: Yük değişimi ve evrimi (Big M_load) + kapasite limiti
+# C22: Net yük değişimi (delta)
 for j in Nw:
     for k in K:
         for r in R:
-            # load_in  = quicksum(f[p,k,r] for p in P if orig[p]==j)
-            # load_out = quicksum(f[p,k,r] for p in P if dest[p]==j)
-            load_in  = quicksum(q_product[p] * f[p,k,r] for p in P if orig[p]==j)
-            load_out = quicksum(q_product[p] * f[p,k,r] for p in P if dest[p]==j)
-            model.addConstr(delta[j,k,r] >= load_in - load_out)
-            for i in Nw:
-                model.addConstr(y[j,k,r] <=  y[i,k,r] + delta[j,k,r] + M_load*(1-x[i,j,k,r]))
-                model.addConstr(y[j,k,r] >=  y[i,k,r] + delta[j,k,r] - M_load*(1-x[i,j,k,r]))
-                # model.addConstr(y[j,k,r] <= q[k])
-                model.addConstr(y[j,k,r] <= q_vehicle[k])
+            load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if orig[p] == j)
+            load_out = quicksum(q_product[p] * f[p, k, r] for p in P if dest[p] == j)
+            model.addConstr(delta[j, k, r] >= load_in - load_out, name=f"C22_delta_{j}_{k}_{r}")
 
-# C23 and C24: Araç yük güncelleme
+# C23–C24: Yük evrimi alt/üst sınırları
 for i in Nw:
     for j in Nw:
+        if i == j: continue
         for k in K:
             for r in R:
-                model.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_load * (1 - x[i, j, k, r]), name=f"C23_{i}_{j}_{k}_{r}")
-                model.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_load * (1 - x[i, j, k, r]), name=f"C24_{i}_{j}_{k}_{r}")
-
-# C25: Aracın yükü kapasitesini aşamaz
+                if (i, j, k, r) in x:
+                    model.addConstr(
+                        y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_load * (1 - x[i, j, k, r]),
+                        name=f"C23_load_lb_{i}_{j}_{k}_{r}"
+                    )
+                    model.addConstr(
+                        y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_load * (1 - x[i, j, k, r]),
+                        name=f"C24_load_ub_{i}_{j}_{k}_{r}"
+                    )
+# C25: Kapasite
 for j in Nw:
     for k in K:
         for r in R:
-            model.addConstr(y[j, k, r] <= q_vehicle[k], name=f"C25_{j}_{k}_{r}")                
+            model.addConstr(y[j, k, r] <= q_vehicle[k], name=f"C25_capacity_{j}_{k}_{r}")
 
-# 8) Gurobi parametreleri ve optimize et
-model.setParam('TimeLimit', 600)
+# Define h (e.g., the depot node)
+h = 'h'
+
+# C26: z[k,r] = sum_{j∈Nw} x[h,j,k,r]
+for k in K:
+    for r in R:
+        model.addConstrs(z[k, r] == gp.quicksum(X(h, j, k, r) for j in Nw), name="C26_z_link"
+        )
+
+# C27: z_{k,r} ≥ z_{k,r+1} (r = 1..|R|-1)
+for k in K:
+    for idx in range(len(R) - 1):
+        r_cur = R[idx]
+        r_nxt = R[idx + 1]
+        model.addConstr(
+            z[k, r_cur] >= z[k, r_nxt],
+            name=f"C27_z_monotone[{k},{r_cur}->{r_nxt}]"
+        )
+
+# C28: u_{jkr} ≥ u_{ikr} + 1 − Umax (1 − x_{i j k r}),  ∀ i≠j ∈ Nw
+for k in K:
+    for r in R:
+        for i in Nw:
+            for j in Nw:
+                if i == j:
+                    continue
+                model.addConstr(
+                    u[j, k, r] >= u[i, k, r] + 1 - Umax * (1 - X(i, j, k, r)),
+                    name=f"C28_MTZ[{i}->{j},{k},{r}]"
+                )
+
+# C29: u[j,k,r] ≤ Umax * Σ_{i∈N, i≠j} x[i,j,k,r]
+for j in Nw:
+    for k in K:
+        for r in R:
+            indeg = quicksum(
+                x[i, j, k, r]
+                for i in N
+                if i != j and (i, j, k, r) in x
+            )
+            model.addConstr(u[j, k, r] <= Umax * indeg, name=f"C29_u_ub[{j},{k},{r}]")
+
+# C30: u[j,k,r] ≥ Σ_{i∈N, i≠j} x[i,j,k,r]
+for j in Nw:
+    for k in K:
+        for r in R:
+            indeg = quicksum(
+                x[i, j, k, r]
+                for i in N
+                if i != j and (i, j, k, r) in x
+            )
+            model.addConstr(u[j, k, r] >= indeg, name=f"C30_u_lb[{j},{k},{r}]")
+
+# C31: u[dp,k,r] ≥ u[op,k,r] + 1 − Umax * (1 − f[p,k,r])
+for k in K:
+    for r in R:
+        for p in P:
+            op = orig[p]   # product p origin node
+            dp = dest[p]   # product p destination node
+            model.addConstr(
+                u[dp, k, r] >= u[op, k, r] + 1 - Umax * (1 - f[p, k, r]),
+                name=f"C31_seq_prec[{p},{k},{r}]"
+            )
+
+
+model.setParam('TimeLimit', 3600)
 model.setParam('MIPGap', 0.03)
 model.setParam('LogFile', 'gurobi_log.txt')
-# model.setParam('Presolve', 2)
-# model.setParam('NoRelHeurTime', 360)
-# model.setParam('MIPFocus', 1)
-model.setParam('MIPFocus', 3)
-model.setParam('Cuts', 3)
+model.setParam('Presolve', 2)
+model.setParam('MIPFocus', 1)
+model.setParam('Heuristics', 0.1)
+model.setParam('SoftMemLimit', 6)
+model.setParam('NodefileStart', 0.5)
+model.setParam('Threads', 6)
 
+model.update()
+model.printStats()
 model.optimize()
 
-# 9) Sonuç veya IIS analizi
+# ---------------------------- 9) çıktı/rapor (görsel YOK) ----------------------------
 if model.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
-    for p in P:
-        for k in K:
-            for r in R:
-                if f[p,k,r].X > 0.5:
-                    print(f"Ürün {p}: Araç {k}, Rota {r}, Bekleme: {w[p].X:.1f} dk")
+    xdf = tidy(x.values()); xdf.columns = ['var','i','j','k','r','val']
+    fdf = tidy(f.values()); fdf.columns = ['var','p','k','r','val']
+    zdf = tidy(z.values()); zdf.columns = ['var','k','r','val']
+    udf = tidy(u.values()); udf.columns = ['var','j','k','r','u']
+    wdf = tidy(w.values()); wdf.columns = ['var','p','w_val']
 
-    xijkr_results_df = model_organize_results(x.values())
-    xijkr_results_df.columns = ['var_name', 'from_node', 'to_node', 'vehicle', 'route', 'value']
-    print("x_ijkr results are extracted...")
+    tadf = tidy(ta.values()); tadf.columns=['var','node','k','r','time']; tadf['hhmm']=tadf['time'].apply(fmt_hhmm)
+    tddf = tidy(td.values()); tddf.columns=['var','node','k','r','time']; tddf['hhmm']=tddf['time'].apply(fmt_hhmm)
+    tsdf = tidy(ts.values()); tsdf.columns=['var','node','k','r','time']; tsdf['hhmm']=tsdf['time'].apply(fmt_hhmm)
 
-    f_pkr_results_df = model_organize_results(f.values())
-    f_pkr_results_df.columns = ['var_name', 'product', 'vehicle', 'route', 'value']
-    print("f_pkr results are extracted...")
+    ydf   = tidy(y.values());    ydf.columns   = ['var','node','k','r','y_val']
+    deldf = tidy(delta.values()); deldf.columns = ['var','node','k','r','delta_val']
 
-    w_p_results_df = model_organize_results(w.values())
-    w_p_results_df.columns = ['var_name', 'product', 'value']
-    print("w_p results are extracted...")
+    used = xdf[(xdf['val']>0.5)].copy()
+    visit = (used[used['j'].isin(Nw)]
+             .merge(udf[['j','k','r','u']], on=['j','k','r'], how='left')
+             .merge(tadf[['node','k','r','hhmm']].rename(columns={'node':'j','hhmm':'ta_hhmm'}), on=['j','k','r'], how='left')
+             .merge(tddf[['node','k','r','hhmm']].rename(columns={'node':'j','hhmm':'td_hhmm'}), on=['j','k','r'], how='left')
+             .merge(ydf[['node','k','r','y_val']].rename(columns={'node':'j','y_val':'y_after'}), on=['j','k','r'], how='left'))
+    visit = visit[['k','r','j','u','ta_hhmm','td_hhmm','y_after']].drop_duplicates().sort_values(['k','r','u'], ignore_index=True)
 
-    y_jkr_results_df = model_organize_results(y.values())
-    y_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
-    print("y_jkr results are extracted...")
+    outdir = 'results'
+    os.makedirs(outdir, exist_ok=True)
+    fn = os.path.join(outdir, f"result_of_run_{datetime.now().strftime('%Y_%m_%d_%H_%M')}.xlsx")
+    with pd.ExcelWriter(fn, engine='xlsxwriter') as wr:
+        pd.DataFrame([{
+            'obj_value': model.objVal if model.SolCount>0 else None,
+            'best_bound': getattr(model, 'objbound', None),
+            'mip_gap': getattr(model, 'mipgap', None),
+            'runtime': model.Runtime
+        }]).to_excel(wr, sheet_name='optimization_results', index=False)
 
-    ta_jkr_results_df = model_organize_results(ta.values())
-    ta_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
-    ta_jkr_results_df['time_fmt'] = ta_jkr_results_df['value'].astype(int).apply(format_minutes_with_day)
-    print("ta_jkr results are extracted...")
+        xdf.to_excel(wr, sheet_name='x_ijkr', index=False)
+        fdf.to_excel(wr, sheet_name='f_pkr', index=False)
+        zdf.to_excel(wr, sheet_name='z_kr', index=False)
+        udf.to_excel(wr, sheet_name='u_jkr', index=False)
+        wdf.to_excel(wr, sheet_name='w_p', index=False)
+        tadf.to_excel(wr, sheet_name='ta', index=False)
+        tddf.to_excel(wr, sheet_name='td', index=False)
+        tsdf.to_excel(wr, sheet_name='ts', index=False)
+        ydf.to_excel(wr, sheet_name='y_jkr', index=False)
+        deldf.to_excel(wr, sheet_name='delta_jkr', index=False)
+        visit.to_excel(wr, sheet_name='itinerary', index=False)
 
-    td_jkr_results_df = model_organize_results(td.values())
-    td_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
-    td_jkr_results_df['time_fmt'] = td_jkr_results_df['value'].astype(int).apply(format_minutes_with_day)
-    print("td_jkr results are extracted...")
-
-    ts_jkr_results_df = model_organize_results(ts.values())
-    ts_jkr_results_df.columns = ['var_name', 'node', 'vehicle', 'route', 'value']
-    ts_jkr_results_df['time_fmt'] = ts_jkr_results_df['value'].astype(int).apply(format_minutes_with_day)
-    print("ts_jkr results are extracted...")
-
-    delta_jkr_results_df = model_organize_results(delta.values())
-    delta_jkr_results_df.columns = ['var_name', 'product', 'vehicle', 'route', 'value']
-    print("delta_jkr results are extracted...")
-
-    optimization_results_df = pd.DataFrame(
-        columns=['model_obj_value', 'model_obj_bound', 'gap', 'gurobi_time'])
-
-    optimization_results_df.loc[len(optimization_results_df.index)] = [model.objval, model.objbound, model.mipgap, model.runtime]
-
-    output_dir = 'results'
-    #writer_file_name = os.path.join('outputs', "result_of_run_{}.xlsx".format(str(datetime.now().strftime('%Y_%m_%d_%H_%M'))))
-    writer_file_name = os.path.join(output_dir, "result_of_run_{}.xlsx".format(str(datetime.now().strftime('%Y_%m_%d_%H_%M'))))
-
-    print("start printing results to excel file.")
-
-    writer = pd.ExcelWriter(writer_file_name)
-    optimization_results_df.to_excel(writer, sheet_name='optimization_results')
-    xijkr_results_df.to_excel(writer, sheet_name='xijkr_results')
-    f_pkr_results_df.to_excel(writer, sheet_name='f_pkr_results')
-    w_p_results_df.to_excel(writer, sheet_name='w_p_results')
-    y_jkr_results_df.to_excel(writer, sheet_name='y_jkr_results')
-    ta_jkr_results_df.to_excel(writer, sheet_name='ta_jkr_results')
-    td_jkr_results_df.to_excel(writer, sheet_name='td_jkr_results')
-    ts_jkr_results_df.to_excel(writer, sheet_name='ts_jkr_results')
-    delta_jkr_results_df.to_excel(writer, sheet_name='delta_jkr_results')
-    writer.close()
-
-    print("All results are printed.")
+    print("Excel yazıldı:", fn)
 
 elif model.status == GRB.INFEASIBLE:
-    print("Model infeasible. Computing IIS...")
+    print("Model infeasible. IIS hesaplanıyor…")
     model.computeIIS()
     model.write("infeasible.ilp")
-    print("Go check infeasible_model.ilp file")
-
-    # model.write(data_path + "model.ilp")
-
-    print("IIS raporu kaydedildi:", data_path + "model.ilp")
+    print("IIS kaydedildi: infeasible.ilp")
 else:
     print(f"Çözüm bulunamadı. Status = {model.status}")
