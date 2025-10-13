@@ -1,0 +1,108 @@
+
+Gurobi 12.0.0 (win64) logging started Sun Oct 12 10:11:55 2025
+
+Set parameter LogFile to value "C:\Users\Asus\Desktop\result_of_run_2025_10_12_10_11.txt"
+Statistics for model 'InternalLogistics':
+  Problem type                : MIP
+  Linear constraint matrix    : 14010 rows, 4486 columns, 70962 nonzeros
+  Variable types              : 1246 continuous, 3240 integer (3000 binary)
+  Matrix range                : [1e-01, 4e+04]
+  Objective range             : [3e+00, 1e+01]
+  Bounds range                : [1e+00, 2e+01]
+  RHS range                   : [1e-03, 4e+04]
+=== BASE DATE INFO ===
+Base date (t=0): 2025-06-01 00:00
+Horizon (days): 30
+======================
+
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 6 threads
+
+Non-default parameters:
+TimeLimit  36000
+SoftMemLimit  6
+MIPGap  0.03
+Heuristics  0.1
+MIPFocus  1
+NodefileStart  0.5
+Symmetry  2
+Cuts  2
+Aggregate  2
+Presolve  2
+Threads  6
+
+Optimize a model with 14010 rows, 4486 columns and 70962 nonzeros
+Model fingerprint: 0x17a41d97
+Variable types: 1246 continuous, 3240 integer (3000 binary)
+Coefficient statistics:
+  Matrix range     [1e-01, 4e+04]
+  Objective range  [3e+00, 1e+01]
+  Bounds range     [1e+00, 2e+01]
+  RHS range        [1e-03, 4e+04]
+Presolve removed 11208 rows and 3496 columns
+Presolve time: 0.07s
+Presolved: 2802 rows, 990 columns, 16128 nonzeros
+Variable types: 306 continuous, 684 integer (612 binary)
+Found heuristic solution: objective 30.0000000
+Root relaxation presolved: 2802 rows, 990 columns, 16128 nonzeros
+
+
+Use crossover to convert LP symmetric solution to basic solution...
+
+Root relaxation: objective 2.400000e+01, 601 iterations, 0.04 seconds (0.05 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   24.00000    0   40   30.00000   24.00000  20.0%     -    0s
+     0     0   24.00000    0   44   30.00000   24.00000  20.0%     -    0s
+     0     0   24.00000    0   44   30.00000   24.00000  20.0%     -    0s
+     0     0   24.00000    0   44   30.00000   24.00000  20.0%     -    0s
+     0     0   24.00000    0   40   30.00000   24.00000  20.0%     -    0s
+     0     0   24.56046    0   40   30.00000   24.56046  18.1%     -    0s
+     0     0   24.59474    0   44   30.00000   24.59474  18.0%     -    0s
+     0     0   24.66972    0   40   30.00000   24.66972  17.8%     -    0s
+     0     0   25.00000    0   43   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.00000    0   44   30.00000   25.00000  16.7%     -    0s
+     0     0   25.10000    0   44   30.00000   25.10000  16.3%     -    1s
+     0     0   25.14787    0   44   30.00000   25.14787  16.2%     -    1s
+
+Cutting planes:
+  Learned: 2
+  Gomory: 7
+  Lift-and-project: 7
+  Implied bound: 42
+  Projected implied bound: 2
+  MIR: 10
+  Flow cover: 67
+  Zero half: 1
+  RLT: 24
+  Relax-and-lift: 1
+
+Explored 1 nodes (3798 simplex iterations) in 1.20 seconds (1.21 work units)
+Thread count was 6 (of 16 available processors)
+
+Solution count 1: 30 
+
+Optimal solution found (tolerance 3.00e-02)
+Best objective 3.000000000000e+01, best bound 3.000000000000e+01, gap 0.0000%
+
+=== RUN SUMMARY ===
+Objective: distance
+Status: 2
+ObjValue: 30.0
+BestBound: 30.0
+MIPGap: 0.0
+Runtime (s): 1.2020001411437988
+Excel file: results\result_of_run_2025_10_12_10_11.xlsx
+Base date: 2025-06-01, Horizon days: 30
+|K| = 6 (vehicles), |R| = 2 (routes), toplam kombinasyon: 12 (K×R)
