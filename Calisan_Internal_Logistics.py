@@ -7,7 +7,7 @@ from datetime import datetime, time, timedelta
 OBJECTIVE      = "distance"
 START_AT_ZERO  = False
 ENABLE_C2      = True 
-BASE_DATE      = datetime(2025, 6, 1)
+BASE_DATE      = datetime(2025, 1, 1)
 HORIZON_DAYS   = 30
 
 TIME_LIMIT = 3600
