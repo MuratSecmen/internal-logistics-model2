@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta
 
 OBJECTIVE      = "distance"
 START_AT_ZERO  = False
-ENABLE_C2      = True 
+ENABLE_C2      = True
 BASE_DATE      = datetime(2025, 1, 1)
 HORIZON_DAYS   = 30
 
@@ -44,12 +44,13 @@ def tidy(var_values):
         rows.append(parts+[val])
     return pd.DataFrame(rows)
 
+# ================== VERİ OKUMA ==================
 data_path = r"C:\Users\Asus\Desktop\Er\\"
 desktop_dir = r"C:\Users\Asus\Desktop"
 
 nodes     = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles  = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(20)
+products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(100)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
@@ -68,9 +69,7 @@ def _read_dist(path, val_col):
 dist_min   = _read_dist(os.path.join(data_path, "distances - dakika.xlsx"), "duration_min")
 dist_metre = _read_dist(os.path.join(data_path, "distances - metre.xlsx"),  "duration_metre")
 
-# ============================================================================
-# 2) SETLER / PARAMETRELER
-# ============================================================================
+# ================== 2) SETLER / PARAMETRELER ==================
 nodes['node_id'] = nodes['node_id'].astype(str).str.strip()
 N  = nodes['node_id'].dropna().drop_duplicates().tolist()
 Nw = [n for n in N if n != 'h']
@@ -78,6 +77,8 @@ Nw = [n for n in N if n != 'h']
 vehicles['vehicle_id'] = vehicles['vehicle_id'].astype(str).str.strip()
 vehicles = vehicles.dropna(subset=['vehicle_id']).drop_duplicates('vehicle_id', keep='first')
 K = vehicles['vehicle_id'].tolist()
+if len(K) < 3:
+    raise ValueError("Bu kurgu için en az 3 araç gerekir (S1: 3 araç, S2: 2 araç).")
 q_vehicle = dict(zip(K, vehicles['capacity_m2']))
 
 products['product_id']  = products['product_id'].astype(str).str.strip()
@@ -95,8 +96,10 @@ su        = dict(zip(P, products['unload_time']))
 ep_min_day = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))  # 0..1439
 ep_min_abs = {p: ep_min_day[p] for p in P}
 
-max_routes = min(len(P)//max(1,len(K)) + 1, 7)
-R = [f"r{i}" for i in range(1, max_routes+1)]
+# --------- Vardiya/rota (S1: 3 tur, S2: 4 tur) ---------
+S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]  # 3 tur
+S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]  # 4 tur
+R = S1_ROUTES + S2_ROUTES
 
 U = int(max(1, len(Nw)))
 T_HORIZON = float(HORIZON_DAYS*1440)
@@ -104,9 +107,7 @@ MAX_CAP   = float(max(q_vehicle.values()) if q_vehicle else 0.0)
 M = max(T_HORIZON, MAX_CAP)
 eps_route_gap = 1e-3
 
-# ============================================================================
-# 3) MODEL
-# ============================================================================
+# ================== 3) MODEL ==================
 m = gp.Model("InternalLogistics")
 
 def arc_exists(i, j, k, r):
@@ -117,7 +118,7 @@ arcs = [(i, j, k, r) for i in N for j in N for k in K for r in R if arc_exists(i
 # Karar değişkenleri
 x = m.addVars(arcs, vtype=GRB.BINARY, name="x")
 f = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")
-y = m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="y") 
+y = m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="y")
 ta= m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="ta")
 td= m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="td")
 ts= m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, name="ts")
@@ -128,18 +129,14 @@ w = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
 def X(i, j, k, r):
     return x[(i, j, k, r)] if (i, j, k, r) in x else gp.LinExpr(0.0)
 
-# ============================================================================
-# 4) AMAÇ
-# ============================================================================
+# ================== 4) AMAÇ ==================
 if OBJECTIVE.lower() == "wait":
     m.setObjective(quicksum(w[p] for p in P), GRB.MINIMIZE)
 else:
     m.setObjective(quicksum(dist_min.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs),
                    GRB.MINIMIZE)
 
-# ============================================================================
-# 5) KISITLAR
-# ============================================================================
+# ================== 5) KISITLAR ==================
 m.addConstr(
     quicksum(dist_metre.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs) >= 120,
     name="AUX_lb1_total_distance_ge_120"
@@ -199,14 +196,15 @@ for p in P:
             m.addConstr(lhs_o >= f[p, k, r], name=f"eq10_visit_origin_p{p}_{k}_{r}")
             m.addConstr(lhs_d >= f[p, k, r], name=f"eq11_visit_dest_p{p}_{k}_{r}")
 
-# eq_12: İlk turun depo çıkışı (= 00:00 veya 07:00)
+# -------- İlk turun depo çıkışı (S1_r1) --------
 for k in K:
-    if START_AT_ZERO:
-        m.addConstr(td['h', k, 'r1'] == 0,   name=f"eq12_home_depart_0000_{k}")
-    else:
-        m.addConstr(td['h', k, 'r1'] == 420, name=f"eq12_home_depart_0700_{k}")
+    if 'S1_r1' in R:
+        if START_AT_ZERO:
+            m.addConstr(td['h', k, 'S1_r1'] == 0,   name=f"eq12_home_depart_0000_{k}")
+        else:
+            m.addConstr(td['h', k, 'S1_r1'] == 420, name=f"eq12_home_depart_0700_{k}")
 
-# eq_13: Rotalar arası zaman tutarlılığı
+# eq_13: Rotalar arası zaman tutarlılığı (R sırasına göre)
 for k in K:
     for idx in range(1, len(R)):
         r_prev, r_now = R[idx-1], R[idx]
@@ -348,9 +346,36 @@ for k in K:
                     name=f"eq28_seq_prec[{p},{k},{r}]"
                 )
 
-# ============================================================================
-# 6) PARAMETRELER ve LOG
-# ============================================================================
+# ----- S2'de 3. aracı kapat (yalnız ilk iki araç aktif) -----
+S2_ALLOWED = set(K[:2])
+for r in S2_ROUTES:
+    for k in K:
+        if k not in S2_ALLOWED:
+            m.addConstr(
+                gp.quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x) == 0,
+                name=f"S2_ban_depart_{k}_{r}"
+            )
+            m.addConstr(
+                gp.quicksum(f[p, k, r] for p in P) == 0,
+                name=f"S2_ban_assign_{k}_{r}"
+            )
+
+# ----- S1/S2 zaman pencereleri -----
+S1_START = 7*60        # 07:00 -> 420
+S1_END   = 14*60 + 59  # 14:59 -> 899
+for r in S1_ROUTES:
+    for k in K:
+        m.addConstr(td['h', k, r] >= S1_START, name=f"S1_td_ge_start[{k},{r}]")
+        m.addConstr(ta['h', k, r] <= S1_END,   name=f"S1_ta_le_end[{k},{r}]")
+
+S2_START = 15*60       # 15:00 -> 900
+S2_END   = 23*60       # 23:00 -> 1380
+for r in S2_ROUTES:
+    for k in K:
+        m.addConstr(td['h', k, r] >= S2_START, name=f"S2_td_ge_start[{k},{r}]")
+        m.addConstr(ta['h', k, r] <= S2_END,   name=f"S2_ta_le_end[{k},{r}]")
+
+# ================== 6) PARAMETRELER ve LOG ==================
 timestamp   = datetime.now().strftime('%Y_%m_%d_%H_%M')
 excel_base  = f"result_of_run_{timestamp}"
 excel_dir   = 'results'
@@ -362,13 +387,6 @@ m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
 m.setParam('Threads', THREADS)
 m.setParam('Presolve', 2)
-m.setParam('MIPFocus', 1)
-m.setParam('Heuristics', 0.1)
-m.setParam('SoftMemLimit', 6)
-m.setParam('NodefileStart', 0.5)
-m.setParam('Cuts', 2)
-m.setParam('Aggregate', 2)
-m.setParam('Symmetry', 2)
 m.setParam('LogFile', log_path)
 
 m.update()
@@ -392,9 +410,7 @@ def append_log(text):
     except Exception as e:
         print("Log yazım hatası:", e)
 
-# ============================================================================
-# 7) RAPOR
-# ============================================================================
+# ================== 7) RAPOR ==================
 if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     xdf = tidy(x.values()); xdf.columns = ['var','i','j','k','r','val']
     fdf = tidy(f.values()); fdf.columns = ['var','p','k','r','val']

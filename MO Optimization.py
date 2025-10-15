@@ -381,21 +381,11 @@ m.setParam('Threads', THREADS)
 m.setParam('Presolve', 2)
 m.setParam('MIPFocus', 1)
 m.setParam('Heuristics', 0.1)
-m.setParam('SoftMemLimit', 6)
-m.setParam("FlowCoverCuts", 2)
-m.setParam('NodefileStart', 0.5)
-m.setParam('Cuts', 3)
-m.setParam("ImpliedCuts", 2)
-m.setParam("GomoryPasses", 2)
-m.setParam("MIRCuts", 2)
-# RLT pahalıdır; 0/1 arası dene
-m.setParam("RLTCuts", 0.5)
-m.setParam("CutPasses", 3)
-m.setParam('Aggregate', 2)
-m.setParam('Symmetry', 2)
-m.setParam("NumericFocus", 1)   # 2 de denenebilir
-m.setParam("ScaleFlag", 2)
-
+# m.setParam('SoftMemLimit', 6)
+# m.setParam('NodefileStart', 0.5)
+# m.setParam('Cuts', 2)
+# m.setParam('Aggregate', 2)
+# m.setParam('Symmetry', 2)
 m.setParam('LogFile', log_path)
 
 m.update()
@@ -425,7 +415,7 @@ best_wait = float(m.objVal)
 append_log(f"[PHASE-1] WAIT* = {best_wait}")
 
 # Faz-1.5: DIST-only ve WAIT@DIST
-m.setObjective(DIST_EXPR_MIN, GRB.MINIMIZE)  # metreye geçmek istersen: DIST_EXPR_METRE
+m.setObjective(, GRB.MINIMIZE)  # metreye geçmek istersen: DIST_EXPR_METRE
 m.optimize()
 if m.SolCount > 0:
     wait_at_dist = float(sum(w[p].X for p in P))
