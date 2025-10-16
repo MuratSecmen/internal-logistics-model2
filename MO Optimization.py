@@ -377,10 +377,10 @@ def append_log(text):
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
-m.setParam('Threads', THREADS)
+# m.setParam('Threads', THREADS)
 m.setParam('Presolve', 2)
-m.setParam('MIPFocus', 1)
-m.setParam('Heuristics', 0.1)
+# m.setParam('MIPFocus', 1)
+# m.setParam('Heuristics', 0.1)
 # m.setParam('SoftMemLimit', 6)
 # m.setParam('NodefileStart', 0.5)
 # m.setParam('Cuts', 2)
