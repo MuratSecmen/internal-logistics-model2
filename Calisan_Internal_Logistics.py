@@ -17,7 +17,6 @@ ENABLE_TIME_BUDGET = False
 TIME_BUDGET = 999999
 
 def ready_to_min(v):
-    """Timestamp/'HH:MM'/'YYYY-MM-DD HH:MM'/time/sayı -> dakika (0..1439)"""
     if pd.isna(v): return 0
     if isinstance(v, (pd.Timestamp, datetime)): return int(v.hour)*60 + int(v.minute)
     if isinstance(v, time): return int(v.hour)*60 + int(v.minute)
@@ -26,10 +25,10 @@ def ready_to_min(v):
     dt = pd.to_datetime(s, errors='coerce')
     if pd.notna(dt): return int(dt.hour)*60 + int(dt.minute)
     if ":" in s:
-        hh, mm = s.split(":")
-        return int(hh)*60 + int(mm)
+        hh, mm = s.split(":"); return int(hh)*60 + int(mm)
     return int(float(s))
 
+BASE_DATE = BASE_DATE  # just to be explicit
 def minutes_to_stamp(total_min, base_dt=BASE_DATE):
     if total_min is None: return ''
     dt = base_dt + timedelta(minutes=float(total_min))
@@ -65,7 +64,7 @@ def _read_dist(path, val_col):
     df = df.dropna(subset=[val_col])
     return {(r['from_node'], r['to_node']): float(r[val_col]) for _, r in df.iterrows()}
 
-
+# Not: dist_min = dakika, dist_metre = metre
 dist_min   = _read_dist(os.path.join(data_path, "distances - dakika.xlsx"), "duration_min")
 dist_metre = _read_dist(os.path.join(data_path, "distances - metre.xlsx"),  "duration_metre")
 
@@ -96,17 +95,18 @@ su        = dict(zip(P, products['unload_time']))
 ep_min_day = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))
 ep_min_abs = {p: ep_min_day[p] for p in P}
 
+# Vardiya/rota takvimi
 S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]  # 3 tur
 S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]  # 4 tur
 R = S1_ROUTES + S2_ROUTES
 
 U = int(max(1, len(Nw)))
-T_HORIZON = float(HORIZON_DAYS*1440)
+HORIZON_MIN = float(HORIZON_DAYS*1440)
 MAX_CAP   = float(max(q_vehicle.values()) if q_vehicle else 0.0)
-M = max(T_HORIZON, MAX_CAP)
+M = max(HORIZON_MIN, MAX_CAP)
 eps_route_gap = 1e-3
 
-
+# Vardiya pencereleri
 S1_START = 7*60        # 07:00
 S1_END   = 14*60 + 59  # 14:59
 S2_START = 15*60       # 15:00
@@ -115,10 +115,10 @@ S2_END   = 23*60       # 23:00
 def shift_window(r_name):
     if r_name in S1_ROUTES: return S1_START, S1_END
     if r_name in S2_ROUTES: return S2_START, S2_END
-    return 0, int(T_HORIZON)
+    return 0, int(HORIZON_MIN)
 
 # ---------- Model ----------
-m = gp.Model("InternalLogistics_LaTeXAligned")
+m = gp.Model("InternalLogistics_NoZ")
 
 def arc_exists(i, j, k, r):
     return (i != j) and not (i == 'h' and j == 'h') and ((i, j) in dist_metre or (i, j) in dist_min)
@@ -135,10 +135,14 @@ ts    = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, name="ts")
 delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")
 u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")
 w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
-z     = m.addVars(K, R, vtype=GRB.BINARY, name="z")
 
-def X(i, j, k, r):
-    return x[(i, j, k, r)] if (i, j, k, r) in x else gp.LinExpr(0.0)
+# Vardiya-bazlı araç aktivasyon değişkenleri
+vS1   = m.addVars(K, vtype=GRB.BINARY, name="vS1")  # araç k S1’de aktif?
+vS2   = m.addVars(K, vtype=GRB.BINARY, name="vS2")  # araç k S2’de aktif?
+
+def dep_out_expr(k, r):
+    # Depodan çıkış: toplam x[h->j,k,r] (en fazla 1 olduğu için 0/1 davranır)
+    return quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
 
 # ---------- Amaç ----------
 if OBJECTIVE.lower() == "wait":
@@ -155,30 +159,29 @@ if ENABLE_TIME_BUDGET:
                 <= TIME_BUDGET, name="TIME_BUDGET")
 
 # ---------- Kısıtlar ----------
-# eq_3: Depoya giriş=çıkış (rota kapatma)
+# eq_3: Depoya giriş=çıkış
 for k in K:
     for r in R:
-        out_h = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
+        out_h = dep_out_expr(k, r)
         in_h  = quicksum(x[i, 'h', k, r] for i in Nw if (i, 'h', k, r) in x)
         m.addConstr(out_h == in_h, name=f"eq3_flow_home[{k},{r}]")
 
 # eq_4: Depodan en fazla 1 çıkış
 for k in K:
     for r in R:
-        out_h = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
+        out_h = dep_out_expr(k, r)
         m.addConstr(out_h <= 1, name=f"eq4_one_depart[{k},{r}]")
 
-# --- z aktivasyonu ve bağlayıcılar (eq_5' ve eq_5'') ---
+# (z yerine out_h ile) rota/atama sınırları
 for k in K:
     for r in R:
-        dep_out = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
-        m.addConstr(dep_out == z[k, r], name=f"route_open[{k},{r}]")  # eq_5'
+        out_h = dep_out_expr(k, r)
         m.addConstr(quicksum(x[i, j, k, r] for i in N for j in N if (i, j, k, r) in x)
-                    <= len(N) * z[k, r], name=f"route_edge_cap[{k},{r}]")  # eq_5''
+                    <= len(N) * out_h, name=f"route_edge_cap[{k},{r}]")
         m.addConstr(quicksum(f[p, k, r] for p in P)
-                    <= len(P) * z[k, r], name=f"route_assign_cap[{k},{r}]")  # eq_5''
+                    <= len(P) * out_h, name=f"route_assign_cap[{k},{r}]")
 
-# eq_6: İstasyon ziyareti yalnız ilgili ürün varsa (giriş/çıkış simetrik)
+# eq_6: İstasyon ziyareti yalnız ilgili ürün varsa
 for j in Nw:
     for k in K:
         for r in R:
@@ -188,7 +191,7 @@ for j in Nw:
             m.addConstr(inflow  <= rhs, name=f"eq6_in_restrict[{j},{k},{r}]")
             m.addConstr(outflow <= rhs, name=f"eq6_out_restrict[{j},{k},{r}]")
 
-# eq_7–eq_8: Akış korunumu + istasyona en çok bir giriş
+# eq_7–eq_8: Akış ve tek giriş
 for j in Nw:
     for k in K:
         for r in R:
@@ -197,11 +200,11 @@ for j in Nw:
             m.addConstr(inflow == outflow, name=f"eq7_flow_keep[{j},{k},{r}]")
             m.addConstr(inflow <= 1,       name=f"eq8_one_in[{j},{k},{r}]")
 
-# eq_9: Her ürün tam bir (k,r)’ye atanır
+# eq_9: Ürün ataması
 for p in P:
     m.addConstr(quicksum(f[p, k, r] for k in K for r in R) == 1, name=f"eq9_assign[{p}]")
 
-# eq_10–eq_11: Atandıysa origin/destination ziyaret
+# eq_10–eq_11: Origin/Destination ziyareti
 for p in P:
     op, dp = orig[p], dest[p]
     for k in K:
@@ -212,22 +215,22 @@ for p in P:
                 m.addConstr(lhs_o >= f[p, k, r], name=f"eq10_visit_origin[{p},{k},{r}]")
                 m.addConstr(lhs_d >= f[p, k, r], name=f"eq11_visit_dest[{p},{k},{r}]")
 
-# eq_12: İlk turun depo çıkışı referansı
+# eq_12: İlk turun depo çıkış referansı
 for k in K:
     if 'S1_r1' in R:
         if START_AT_ZERO:
             m.addConstr(td['h', k, 'S1_r1'] == 0,   name=f"eq12_home_depart_0000[{k}]")
         else:
-            m.addConstr(td['h', k, 'S1_r1'] == 420, name=f"eq12_home_depart_0700[{k}]")  # 07:00
+            m.addConstr(td['h', k, 'S1_r1'] == 420, name=f"eq12_home_depart_0700[{k}]")
 
-# eq_13: Rotalar arası zaman tutarlılığı
+# eq_13: Rotalar arası zaman
 for k in K:
     for idx in range(1, len(R)):
         r_prev, r_now = R[idx-1], R[idx]
         m.addConstr(td['h', k, r_now] >= ta['h', k, r_prev] + eps_route_gap,
                     name=f"eq13_next_route_after_prev[{k},{r_prev}->{r_now}]")
 
-# eq_14: Seyir zamanı (dakika) ile varış zamanı
+# eq_14: Seyir zamanı
 for (i, j), tmin in dist_min.items():
     if i == j: continue
     for k in K:
@@ -238,10 +241,10 @@ for (i, j), tmin in dist_min.items():
                     name=f"eq14_time[{i}->{j},{k},{r}]"
                 )
 
-# ts ≥ ta (yardımcı)
+# ts ≥ ta
 m.addConstrs((ts[j, k, r] >= ta[j, k, r] for j in Nw for k in K for r in R), name="TS_ge_TA")
 
-# eq_15: Boşaltma servis süresi
+# eq_15: Boşaltma süresi
 for j in Nw:
     for k in K:
         for r in R:
@@ -250,10 +253,9 @@ for j in Nw:
                 name=f"eq15_service_unload[{j},{k},{r}]"
             )
 
-# eq_16: Ready time (origin)
+# eq_16: Ready time
 for p in P:
-    rt = ep_min_abs[p]
-    j0 = orig[p]
+    rt = ep_min_abs[p]; j0 = orig[p]
     if j0 in Nw:
         for k in K:
             for r in R:
@@ -291,7 +293,7 @@ for p in P:
                 name=f"eq19_wait_lb[{p},{k},{r}]"
             )
 
-# eq_20: Net yük değişimi
+# eq_20: Net yük değişimi (eşitlik – sıkı)
 for j in Nw:
     for k in K:
         for r in R:
@@ -299,7 +301,7 @@ for j in Nw:
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if dest[p] == j)
             m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"eq20_delta_eq[{j},{k},{r}]")
 
-# eq_21–eq_22: Yük evrimi (Big-M lineerleştirmesi)
+# eq_21–eq_22: Yük evrimi
 for i in Nw:
     for j in Nw:
         if i == j: continue
@@ -325,11 +327,13 @@ for j in Nw:
 m.addConstrs((y[j, k, r] >= 0.0 for j in N for k in K for r in R), name="Y_nonneg")
 m.addConstrs((y['h', k, r] == 0.0 for k in K for r in R),          name="Y_home_zero")
 
-# eq_24: Rota aktivasyon monotonisi (z)
+# eq_24: Rota aktivasyonu monotonisi (z yerine out_h)
 for k in K:
     for idx in range(len(R)-1):
         r_cur, r_nxt = R[idx], R[idx+1]
-        m.addConstr(z[k, r_cur] >= z[k, r_nxt], name=f"eq24_z_monotone[{k},{r_cur}->{r_nxt}]")
+        out_cur = dep_out_expr(k, r_cur)
+        out_nxt = dep_out_expr(k, r_nxt)
+        m.addConstr(out_cur >= out_nxt, name=f"eq24_monotone_out[{k},{r_cur}->{r_nxt}]")
 
 # eq_25–eq_27: MTZ
 for k in K:
@@ -360,50 +364,60 @@ for k in K:
                     name=f"eq28_seq_prec[{p},{k},{r}]"
                 )
 
-
-bigM_t = T_HORIZON
-
-
+# ---------- Vardiya Pencereleri (z yok; out_h ile koşullandır) ----------
+bigM_t = HORIZON_MIN
 for r in R:
     s_start, s_end = shift_window(r)
     for k in K:
-        m.addConstr(td['h', k, r] >= s_start - bigM_t*(1 - z[k, r]),
+        out_h = dep_out_expr(k, r)
+        m.addConstr(td['h', k, r] >= s_start - bigM_t*(1 - out_h),
                     name=f"shift_td_ge_start[{k},{r}]")
-        m.addConstr(ta['h', k, r] <= s_end   + bigM_t*(1 - z[k, r]),
+        m.addConstr(ta['h', k, r] <= s_end   + bigM_t*(1 - out_h),
                     name=f"shift_ta_le_end[{k},{r}]")
-
 
 ENFORCE_ALL_TIMES_IN_SHIFT = True
 if ENFORCE_ALL_TIMES_IN_SHIFT:
     for r in R:
         s_start, s_end = shift_window(r)
         for k in K:
+            out_h = dep_out_expr(k, r)
             for j in N:
-                m.addConstr(ta[j, k, r] >= s_start - bigM_t*(1 - z[k, r]),
+                m.addConstr(ta[j, k, r] >= s_start - bigM_t*(1 - out_h),
                             name=f"shift_ta_ge_start[{j},{k},{r}]")
-                m.addConstr(ta[j, k, r] <= s_end   + bigM_t*(1 - z[k, r]),
+                m.addConstr(ta[j, k, r] <= s_end   + bigM_t*(1 - out_h),
                             name=f"shift_ta_le_end2[{j},{k},{r}]")
             for j in Nw:
-                m.addConstr(ts[j, k, r] >= s_start - bigM_t*(1 - z[k, r]),
+                m.addConstr(ts[j, k, r] >= s_start - bigM_t*(1 - out_h),
                             name=f"shift_ts_ge_start[{j},{k},{r}]")
-                m.addConstr(ts[j, k, r] <= s_end   + bigM_t*(1 - z[k, r]),
+                m.addConstr(ts[j, k, r] <= s_end   + bigM_t*(1 - out_h),
                             name=f"shift_ts_le_end[{j},{k},{r}]")
             for j in N:
-                m.addConstr(td[j, k, r] >= s_start - bigM_t*(1 - z[k, r]),
+                m.addConstr(td[j, k, r] >= s_start - bigM_t*(1 - out_h),
                             name=f"shift_td_ge_start2[{j},{k},{r}]")
-                m.addConstr(td[j, k, r] <= s_end   + bigM_t*(1 - z[k, r]),
+                m.addConstr(td[j, k, r] <= s_end   + bigM_t*(1 - out_h),
                             name=f"shift_td_le_end[{j},{k},{r}]")
 
+# ========= VARDİYA-ARAÇ SAYISI ve TUR ALT SINIRLARI (z yok) =========
+VEH_S1 = 3
+VEH_S2 = 2
+MIN_TOURS_S1 = 2
+MIN_TOURS_S2 = 3
 
-S2_ALLOWED = set(K[:2])
-for r in S2_ROUTES:
-    for k in K:
-        if k not in S2_ALLOWED:
-            m.addConstr(quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x) == 0,
-                        name=f"S2_ban_depart[{k},{r}]")
-            m.addConstr(quicksum(f[p, k, r] for p in P) == 0,
-                        name=f"S2_ban_assign[{k},{r}]")
-            m.addConstr(z[k, r] == 0, name=f"S2_ban_z[{k},{r}]")
+# out_h -> vS1/vS2 linkleri
+for k in K:
+    m.addConstrs((dep_out_expr(k, r) <= vS1[k] for r in S1_ROUTES), name=f"link_out_to_vS1[{k}]")
+    m.addConstrs((dep_out_expr(k, r) <= vS2[k] for r in S2_ROUTES), name=f"link_out_to_vS2[{k}]")
+
+# Aktif araç sayıları
+m.addConstr(quicksum(vS1[k] for k in K) == VEH_S1, name="num_active_vehicles_S1")
+m.addConstr(quicksum(vS2[k] for k in K) == VEH_S2, name="num_active_vehicles_S2")
+
+# Aktif araç başına tur alt sınırı
+for k in K:
+    tours_s1 = quicksum(dep_out_expr(k, r) for r in S1_ROUTES)
+    tours_s2 = quicksum(dep_out_expr(k, r) for r in S2_ROUTES)
+    m.addConstr(tours_s1 >= MIN_TOURS_S1 * vS1[k], name=f"min_tours_S1[{k}]")
+    m.addConstr(tours_s2 >= MIN_TOURS_S2 * vS2[k], name=f"min_tours_S2[{k}]")
 
 # ---------- Parametreler ve Çözüm ----------
 timestamp   = datetime.now().strftime('%Y_%m_%d_%H_%M')
@@ -415,8 +429,6 @@ log_path    = os.path.join(desktop_dir, f"{excel_base}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
-# m.setParam('Threads', THREADS)
-# m.setParam('Presolve', 2)
 m.setParam('LogFile', log_path)
 
 m.update(); m.printStats()
@@ -435,12 +447,11 @@ def append_log(text):
     except Exception as e:
         print("Log yazım hatası:", e)
 
-
+# ---------- Rapor ----------
 if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     xdf = tidy(x.values()); xdf.columns = ['var','i','j','k','r','val']
     fdf = tidy(f.values()); fdf.columns = ['var','p','k','r','val']
     udf = tidy(u.values()); udf.columns = ['var','j','k','r','u']
-    zdf = tidy(z.values()); zdf.columns = ['var','k','r','z']
     wdf = tidy(w.values()); wdf.columns = ['var','p','w_val']
 
     tadf = tidy(ta.values()); tadf.columns=['var','node','k','r','time']
@@ -481,7 +492,6 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
         xdf.to_excel(wr, sheet_name='x_ijkr', index=False)
         fdf.to_excel(wr, sheet_name='f_pkr', index=False)
         udf.to_excel(wr, sheet_name='u_jkr', index=False)
-        zdf.to_excel(wr, sheet_name='z_kr', index=False)
         wdf.to_excel(wr, sheet_name='w_p', index=False)
         tadf.to_excel(wr, sheet_name='ta', index=False)
         tddf.to_excel(wr, sheet_name='td', index=False)
