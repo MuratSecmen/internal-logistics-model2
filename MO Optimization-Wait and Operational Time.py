@@ -1,10 +1,15 @@
+# ============================== #
+#  INTERNAL LOGISTICS (LaTeX-ALIGNED, shift-aware)
+#  Objective:  minimize total waiting time (Σ w_p)
+#  Constraint: total travel time (Σ dist_min * x) ≤ 8151
+# ============================== #
 import pandas as pd
 import gurobipy as gp
 from gurobipy import GRB, quicksum
 import re, os
 from datetime import datetime, time, timedelta
 
-OBJECTIVE      = "wait"     # "wait" | "time" | "distance"
+# ---------- Genel Ayarlar ----------
 START_AT_ZERO  = False
 BASE_DATE      = datetime(2025, 1, 1)
 HORIZON_DAYS   = 30
@@ -12,9 +17,6 @@ HORIZON_DAYS   = 30
 TIME_LIMIT = 43200
 MIP_GAP    = 0.03
 THREADS    = 6
-
-ENABLE_TIME_BUDGET = False
-TIME_BUDGET = 999999
 
 def ready_to_min(v):
     """Timestamp/'HH:MM'/'YYYY-MM-DD HH:MM'/time/sayı -> dakika (0..1439)"""
@@ -49,7 +51,7 @@ desktop_dir= r"C:\Users\Asus\Desktop"
 
 nodes     = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles  = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
+products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(50)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
@@ -65,7 +67,7 @@ def _read_dist(path, val_col):
     df = df.dropna(subset=[val_col])
     return {(r['from_node'], r['to_node']): float(r[val_col]) for _, r in df.iterrows()}
 
-
+# Not: dist_min = dakika, dist_metre = metre
 dist_min   = _read_dist(os.path.join(data_path, "distances - dakika.xlsx"), "duration_min")
 dist_metre = _read_dist(os.path.join(data_path, "distances - metre.xlsx"),  "duration_metre")
 
@@ -96,6 +98,7 @@ su        = dict(zip(P, products['unload_time']))
 ep_min_day = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))
 ep_min_abs = {p: ep_min_day[p] for p in P}
 
+# Vardiya/rota takvimi
 S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]  # 3 tur
 S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]  # 4 tur
 R = S1_ROUTES + S2_ROUTES
@@ -106,7 +109,7 @@ MAX_CAP   = float(max(q_vehicle.values()) if q_vehicle else 0.0)
 M = max(T_HORIZON, MAX_CAP)
 eps_route_gap = 1e-3
 
-
+# Vardiya pencereleri
 S1_START = 7*60        # 07:00
 S1_END   = 14*60 + 59  # 14:59
 S2_START = 15*60       # 15:00
@@ -126,33 +129,26 @@ def arc_exists(i, j, k, r):
 arcs = [(i, j, k, r) for i in N for j in N for k in K for r in R if arc_exists(i, j, k, r)]
 
 # Değişkenler
-x     = m.addVars(arcs, vtype=GRB.BINARY, name="x")
-f     = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")
+x     = m.addVars(arcs, vtype=GRB.BINARY, name="x")        # eq_31
+f     = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")     # eq_31
 y     = m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="y")
 ta    = m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="ta")
 td    = m.addVars(N,  K, R, vtype=GRB.CONTINUOUS, name="td")
 ts    = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, name="ts")
 delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")
 u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")
-w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
-z     = m.addVars(K, R, vtype=GRB.BINARY, name="z")
+w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")  # eq_30
+z     = m.addVars(K, R, vtype=GRB.BINARY, name="z")           # rota aktivasyonu
 
 def X(i, j, k, r):
     return x[(i, j, k, r)] if (i, j, k, r) in x else gp.LinExpr(0.0)
 
-# ---------- Amaç ----------
-if OBJECTIVE.lower() == "wait":
-    m.setObjective(quicksum(w[p] for p in P), GRB.MINIMIZE)
-elif OBJECTIVE.lower() == "distance":
-    m.setObjective(quicksum(dist_metre.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs),
-                   GRB.MINIMIZE)
-else:
-    m.setObjective(quicksum(dist_min.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs),
-                   GRB.MINIMIZE)
+# ---------- Amaç (Σ w_p) ve ε-kısıtı (TIME ≤ 8151) ----------
+wait_expr = quicksum(w[p] for p in P)  # ∑ w_p
+time_expr = quicksum(dist_min.get((i, j), 0.0) * x[i, j, k, r] for (i, j, k, r) in arcs)  # dakika
 
-if ENABLE_TIME_BUDGET:
-    m.addConstr(quicksum(dist_min.get((i,j), 0.0) * x[i,j,k,r] for (i,j,k,r) in arcs)
-                <= TIME_BUDGET, name="TIME_BUDGET")
+m.setObjective(wait_expr, GRB.MINIMIZE)
+m.addConstr(time_expr <= 8151, name="TIME_LIMIT_EPSILON")  # sabit üst sınır
 
 # ---------- Kısıtlar ----------
 # eq_3: Depoya giriş=çıkış (rota kapatma)
@@ -168,7 +164,7 @@ for k in K:
         out_h = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
         m.addConstr(out_h <= 1, name=f"eq4_one_depart[{k},{r}]")
 
-# --- z aktivasyonu ve bağlayıcılar (eq_5' ve eq_5'') ---
+# z aktivasyonu ve bağlayıcılar (eq_5' ve eq_5'')
 for k in K:
     for r in R:
         dep_out = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
@@ -360,10 +356,10 @@ for k in K:
                     name=f"eq28_seq_prec[{p},{k},{r}]"
                 )
 
-
+# ---------- Vardiya Pencereleri (z-şartlı, sert) ----------
 bigM_t = T_HORIZON
 
-
+# Depo çıkış/dönüş – yalnızca aktif rotalara uygulanır
 for r in R:
     s_start, s_end = shift_window(r)
     for k in K:
@@ -372,7 +368,7 @@ for r in R:
         m.addConstr(ta['h', k, r] <= s_end   + bigM_t*(1 - z[k, r]),
                     name=f"shift_ta_le_end[{k},{r}]")
 
-
+# Rota içindeki tüm ta/ts/td değerlerini vardiya içine kilitle
 ENFORCE_ALL_TIMES_IN_SHIFT = True
 if ENFORCE_ALL_TIMES_IN_SHIFT:
     for r in R:
@@ -394,7 +390,7 @@ if ENFORCE_ALL_TIMES_IN_SHIFT:
                 m.addConstr(td[j, k, r] <= s_end   + bigM_t*(1 - z[k, r]),
                             name=f"shift_td_le_end[{j},{k},{r}]")
 
-
+# ---------- S2'de 3. aracı kapatma kuralı ----------
 S2_ALLOWED = set(K[:2])
 for r in S2_ROUTES:
     for k in K:
@@ -415,8 +411,8 @@ log_path    = os.path.join(desktop_dir, f"{excel_base}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
-# m.setParam('Threads', THREADS)
-# m.setParam('Presolve', 2)
+m.setParam('Threads', THREADS)
+m.setParam('Presolve', 2)
 m.setParam('LogFile', log_path)
 
 m.update(); m.printStats()
@@ -435,7 +431,7 @@ def append_log(text):
     except Exception as e:
         print("Log yazım hatası:", e)
 
-
+# ---------- Rapor ----------
 if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     xdf = tidy(x.values()); xdf.columns = ['var','i','j','k','r','val']
     fdf = tidy(f.values()); fdf.columns = ['var','p','k','r','val']
@@ -466,7 +462,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
 
     with pd.ExcelWriter(excel_path, engine='xlsxwriter') as wr:
         pd.DataFrame([{
-            'objective': OBJECTIVE,
+            'objective': 'min_total_wait',
             'obj_value': m.objVal if m.SolCount>0 else None,
             'best_bound': getattr(m, 'objbound', None),
             'mip_gap': getattr(m, 'mipgap', None),
@@ -475,7 +471,8 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
             '|K|': len(K), '|R|': len(R), 'KxR': len(K)*len(R),
             'U_(|Nw|)': U, 'M_single': M,
             'base_date': BASE_DATE.strftime('%Y-%m-%d'),
-            'horizon_days': HORIZON_DAYS
+            'horizon_days': HORIZON_DAYS,
+            'epsilon_time_upper': 8151
         }]).to_excel(wr, sheet_name='optimization_results', index=False)
 
         xdf.to_excel(wr, sheet_name='x_ijkr', index=False)
@@ -491,7 +488,8 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
         visit.to_excel(wr, sheet_name='itinerary', index=False)
 
     append_log("\n=== RUN SUMMARY ===")
-    append_log(f"Objective: {OBJECTIVE}")
+    append_log("Objective: min_total_wait")
+    append_log(f"TIME ε upper bound: 8151")
     append_log(f"Status: {m.Status}")
     append_log(f"ObjValue: {getattr(m, 'objVal', None)}")
     append_log(f"BestBound: {getattr(m, 'objbound', None)}")
