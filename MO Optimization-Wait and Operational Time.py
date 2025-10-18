@@ -403,7 +403,7 @@ log_path    = os.path.join(desktop_dir, f"{excel_base}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
-m.setParam('Threads', THREADS)
+# m.setParam('Threads', THREADS)
 m.setParam('Presolve', 2)
 m.setParam('LogFile', log_path)
 
