@@ -1,15 +1,9 @@
-# ============================== #
-#  INTERNAL LOGISTICS (LaTeX-ALIGNED, shift-aware)
-#  Objective:  minimize total travel time (Σ dist_min * x)
-#  Constraint: total waiting time (Σ w_p) ≤ ε   [single global epsilon]
-# ============================== #
 import pandas as pd
 import gurobipy as gp
 from gurobipy import GRB, quicksum
 import re, os
 from datetime import datetime, time, timedelta
 
-# ---------- Genel Ayarlar ----------
 START_AT_ZERO  = False
 BASE_DATE      = datetime(2025, 1, 1)
 HORIZON_DAYS   = 30
@@ -65,7 +59,7 @@ def _read_dist(path, val_col):
     df = df.dropna(subset=[val_col])
     return {(r['from_node'], r['to_node']): float(r[val_col]) for _, r in df.iterrows()}
 
-# Not: dist_min = dakika, dist_metre = metre
+
 dist_min   = _read_dist(os.path.join(data_path, "distances - dakika.xlsx"), "duration_min")
 dist_metre = _read_dist(os.path.join(data_path, "distances - metre.xlsx"),  "duration_metre")
 
@@ -97,8 +91,8 @@ ep_min_day = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))
 ep_min_abs = {p: ep_min_day[p] for p in P}
 
 # Vardiya/rota takvimi
-S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]  # 3 tur
-S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]  # 4 tur
+S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]
+S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]
 R = S1_ROUTES + S2_ROUTES
 
 U = int(max(1, len(Nw)))
@@ -108,10 +102,10 @@ M = max(HORIZON_MIN, MAX_CAP)
 eps_route_gap = 1e-3
 
 # Vardiya pencereleri
-S1_START = 7*60        # 07:00
-S1_END   = 14*60 + 59  # 14:59 -> 899
-S2_START = 15*60       # 15:00 -> 900
-S2_END   = 23*60       # 23:00 -> 1380
+S1_START = 7*60
+S1_END   = 14*60 + 59
+S2_START = 15*60
+S2_END   = 23*60
 
 def shift_window(r_name):
     if r_name in S1_ROUTES: return S1_START, S1_END
@@ -142,8 +136,6 @@ z     = m.addVars(K, R, vtype=GRB.BINARY, name="z")
 time_expr = quicksum(dist_min.get((i, j), 0.0) * x[i, j, k, r] for (i, j, k, r) in arcs)
 wait_expr = quicksum(w[p] for p in P)
 
-# Tek epsilon (global). Güvenli tavan: 1380 * |P|.
-# İstersen sabit bir değer ver: EPS_WAIT = 6000 gibi.
 EPS_WAIT = 1380 * len(P)
 
 m.setObjective(time_expr, GRB.MINIMIZE)
@@ -163,7 +155,6 @@ for k in K:
         out_h = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
         m.addConstr(out_h <= 1, name=f"eq4_one_depart[{k},{r}]")
 
-# z aktivasyonu ve bağlayıcılar
 for k in K:
     for r in R:
         dep_out = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
@@ -292,7 +283,7 @@ for j in Nw:
         for r in R:
             load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if orig[p] == j)
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if dest[p] == j)
-            m.addConstr(delta[j, k, r] == load_in - load_out, name=f"eq20_delta_eq[{j},{k},{r}]")
+            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"eq20_delta_eq[{j},{k},{r}]")
 
 # eq_21–eq_22
 for i in Nw:
@@ -355,7 +346,6 @@ for k in K:
                     name=f"eq28_seq_prec[{p},{k},{r}]"
                 )
 
-# ---------- Vardiya Pencereleri (z-şartlı, sert) ----------
 bigM_t = HORIZON_MIN
 
 for r in R:
@@ -387,7 +377,6 @@ if ENFORCE_ALL_TIMES_IN_SHIFT:
                 m.addConstr(td[j, k, r] <= s_end   + bigM_t*(1 - z[k, r]),
                             name=f"shift_td_le_end[{j},{k},{r}]")
 
-# ---------- S2'de 3. aracı kapatma ----------
 S2_ALLOWED = set(K[:2])
 for r in S2_ROUTES:
     for k in K:
@@ -398,7 +387,6 @@ for r in S2_ROUTES:
                         name=f"S2_ban_assign[{k},{r}]")
             m.addConstr(z[k, r] == 0, name=f"S2_ban_z[{k},{r}]")
 
-# ---------- Parametreler ve Çözüm ----------
 timestamp   = datetime.now().strftime('%Y_%m_%d_%H_%M')
 excel_base  = f"result_of_run_{timestamp}"
 excel_dir   = 'results'
