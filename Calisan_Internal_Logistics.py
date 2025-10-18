@@ -291,13 +291,13 @@ for p in P:
                 name=f"eq19_wait_lb[{p},{k},{r}]"
             )
 
-# eq_20: Net yük değişimi (eşitlik — sıkılaştırma)
+# eq_20: Net yük değişimi
 for j in Nw:
     for k in K:
         for r in R:
             load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if orig[p] == j)
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if dest[p] == j)
-            m.addConstr(delta[j, k, r] == load_in - load_out, name=f"eq20_delta_eq[{j},{k},{r}]")
+            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"eq20_delta_eq[{j},{k},{r}]")
 
 # eq_21–eq_22: Yük evrimi (Big-M lineerleştirmesi)
 for i in Nw:
