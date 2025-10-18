@@ -28,7 +28,7 @@ def ready_to_min(v):
         hh, mm = s.split(":"); return int(hh)*60 + int(mm)
     return int(float(s))
 
-BASE_DATE = BASE_DATE  # just to be explicit
+BASE_DATE = BASE_DATE
 def minutes_to_stamp(total_min, base_dt=BASE_DATE):
     if total_min is None: return ''
     dt = base_dt + timedelta(minutes=float(total_min))
@@ -96,8 +96,8 @@ ep_min_day = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))
 ep_min_abs = {p: ep_min_day[p] for p in P}
 
 # Vardiya/rota takvimi
-S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]  # 3 tur
-S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]  # 4 tur
+S1_ROUTES = [f"S1_r{i}" for i in range(1, 3+1)]
+S2_ROUTES = [f"S2_r{i}" for i in range(1, 4+1)]
 R = S1_ROUTES + S2_ROUTES
 
 U = int(max(1, len(Nw)))
@@ -107,10 +107,10 @@ M = max(HORIZON_MIN, MAX_CAP)
 eps_route_gap = 1e-3
 
 # Vardiya pencereleri
-S1_START = 7*60        # 07:00
-S1_END   = 14*60 + 59  # 14:59
-S2_START = 15*60       # 15:00
-S2_END   = 23*60       # 23:00
+S1_START = 7*60
+S1_END   = 14*60 + 59
+S2_START = 15*60
+S2_END   = 23*60
 
 def shift_window(r_name):
     if r_name in S1_ROUTES: return S1_START, S1_END
@@ -137,8 +137,8 @@ u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")
 w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
 
 # Vardiya-bazlı araç aktivasyon değişkenleri
-vS1   = m.addVars(K, vtype=GRB.BINARY, name="vS1")  # araç k S1’de aktif?
-vS2   = m.addVars(K, vtype=GRB.BINARY, name="vS2")  # araç k S2’de aktif?
+vS1   = m.addVars(K, vtype=GRB.BINARY, name="vS1")
+vS2   = m.addVars(K, vtype=GRB.BINARY, name="vS2")
 
 def dep_out_expr(k, r):
     # Depodan çıkış: toplam x[h->j,k,r] (en fazla 1 olduğu için 0/1 davranır)
@@ -172,7 +172,7 @@ for k in K:
         out_h = dep_out_expr(k, r)
         m.addConstr(out_h <= 1, name=f"eq4_one_depart[{k},{r}]")
 
-# (z yerine out_h ile) rota/atama sınırları
+# eq_5: Rota/atama sınırları
 for k in K:
     for r in R:
         out_h = dep_out_expr(k, r)
@@ -364,7 +364,7 @@ for k in K:
                     name=f"eq28_seq_prec[{p},{k},{r}]"
                 )
 
-# ---------- Vardiya Pencereleri (z yok; out_h ile koşullandır) ----------
+# ---------- Vardiya Pencereleri ----------
 bigM_t = HORIZON_MIN
 for r in R:
     s_start, s_end = shift_window(r)
@@ -397,7 +397,7 @@ if ENFORCE_ALL_TIMES_IN_SHIFT:
                 m.addConstr(td[j, k, r] <= s_end   + bigM_t*(1 - out_h),
                             name=f"shift_td_le_end[{j},{k},{r}]")
 
-# ========= VARDİYA-ARAÇ SAYISI ve TUR ALT SINIRLARI (z yok) =========
+# ========= VARDİYA-ARAÇ SAYISI ve TUR ALT SINIRLARI  =========
 VEH_S1 = 3
 VEH_S2 = 2
 MIN_TOURS_S1 = 2
