@@ -48,7 +48,7 @@ desktop_dir= r"C:\Users\Asus\Desktop"
 
 nodes     = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles  = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
+products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(25)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
@@ -429,6 +429,8 @@ log_path    = os.path.join(desktop_dir, f"{excel_base}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
+# m.setParam('Threads', THREADS)
+# m.setParam('Presolve', 2)
 m.setParam('LogFile', log_path)
 
 m.update(); m.printStats()
