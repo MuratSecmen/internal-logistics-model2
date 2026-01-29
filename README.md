@@ -62,7 +62,7 @@ python main.py
 
 ## Recent Updates
 
-### 30 Ocak 2025 - Big-M Optimization
+### 28 Ocak 2026 - Big-M Renewal
 - Tight bounds implemented for all 7 constraints
 - Constraint 21-22 (Capacity): 50,000x improvement (M: 999,999 → 20/10)
 - Expected 60-80% solution time improvement
