@@ -34,10 +34,10 @@ sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 
-TIME_LIMIT = 600
+TIME_LIMIT = 1200
 MIP_GAP    = 0.03
 THREADS    = 6
-EPS_WAIT = 150  # Toplam bekleme süresi için üst sınır
+EPS_WAIT = 150
 
 # =====================================================================
 # YARDIMCI FONKSİYONLAR
