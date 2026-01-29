@@ -51,7 +51,7 @@ python main.py
 
 ## Gurobi Ayarları
 
-* Çözüm süresi limiti: 86400 saniye (24 saat)
+* Çözüm süresi limiti: 1200 saniye (20 dakika)
 * Kabul edilebilir optimalite boşluğu (`MIPGap`): %5
 * Log dosyası: `gurobi_log.txt`
 
