@@ -58,3 +58,19 @@ python main.py
 ## Sonuçlar
 
 Çözüm bulunamazsa IIS raporu (`model.ilp`) otomatik olarak oluşturulur ve modeldeki tutarsızlıklar hakkında bilgi sağlar.
+
+
+## Recent Updates
+
+### 30 Ocak 2025 - Big-M Optimization
+- Tight bounds implemented for all 7 constraints
+- Constraint 21-22 (Capacity): 50,000x improvement (M: 999,999 → 20/10)
+- Expected 60-80% solution time improvement
+- Tested with 10 parts dataset
+
+### Tight M Values
+- C-14 (Time consistency): M = 449.9 min
+- C-18 (Pickup-delivery): M = 442.9 min  
+- C-19 (Waiting time): M = 480 min
+- C-21-22 (Capacity flow): M = 20/10 m²  
+- C-25 (MTZ subtour): M = 21
