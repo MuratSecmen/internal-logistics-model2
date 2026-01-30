@@ -31,7 +31,7 @@ sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 
 print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
-TIME_LIMIT = 600
+TIME_LIMIT = 1200
 MIP_GAP    = 0.03
 THREADS    = 6
 EPS_WAIT = 150
@@ -119,27 +119,22 @@ q_product = dict(zip(P, products['area_m2']))
 o  = dict(zip(P, products['origin']))
 d  = dict(zip(P, products['destination']))
 
-# ============================================================================
-# TIGHT BIG-M DEĞERLERİ - Optimizasyon (30 Ocak 2025)
-# ============================================================================
-# SENİN VERİLERİNDEN HESAPLANAN PARAMETRELER:
+
+# INPUT VERİLERİNDEN HESAPLANAN PARAMETRELER:
 T_max = 480      # Vardiya süresi (dakika)
 C_max = 11       # En uzun seyahat (dakika)
 e_min = 435      # En erken parça hazır olma (dakika - 07:15)
 Q_max = 20       # Maksimum araç kapasitesi (m²)
 N_w_count = len(Nw)  # İstasyon sayısı
 
-# TIGHT M HESAPLAMALARI (99.4-99.8% İYİLEŞME!):
-M_14 = T_max - e_min + C_max  # = 56.0 dk (Zaman tutarlılığı)
+# TIGHT M HESAPLAMALARI:
+M_14 = T_max - e_min + C_max   # = 56.0 dk (Zaman tutarlılığı)
 M_18 = T_max - e_min           # = 45.0 dk (Alış-teslimat)
 M_19 = T_max                   # = 480.0 dk (Bekleme süresi)
 M_21_22 = Q_max                # = 20 m² (Kapasite) 🔥
 
-# ESKİ NAIVE M (artık kullanılmıyor)
-# M = 10000.0  # ❌ ESKİ DEĞER
-
 epsilon = 0.1
-U = len(Nw)  # MTZ için (zaten optimal)
+U = len(Nw)
 TIME_THRESHOLD = 5000
 
 print("\n" + "="*80)
