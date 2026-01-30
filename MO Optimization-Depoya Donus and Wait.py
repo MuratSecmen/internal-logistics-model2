@@ -31,7 +31,7 @@ terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
 original_stdout = sys.stdout
 sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 
-print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
+print(f" Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 
 TIME_LIMIT = 1200
@@ -371,7 +371,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     
     # Timeout kontrolü
     if m.status == GRB.TIME_LIMIT:
-        print(f"\n⚠️  UYARI: Zaman limiti aşıldı ({TIME_LIMIT}s)")
+        print(f"\n UYARI: Zaman limiti aşıldı ({TIME_LIMIT}s)")
         print(f"En iyi bulunan çözüm: {m.objVal if m.SolCount > 0 else 'YOK'}")
     
     total_wait = sum(w[p].X for p in P if w[p].X is not None)
@@ -409,7 +409,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
               for j in Nw for k in K for r in R if u[j, k, r].X > 0]
     udf = pd.DataFrame(u_data) if u_data else pd.DataFrame(columns=['var', 'j', 'k', 'r', 'u'])
     
-    # ✅ DÜZELTME: z değişkenleri (rota kullanımı)
+    # DÜZELTME: z değişkenleri (rota kullanımı)
     z_data = []
     for k in K:
         for r in R:
@@ -531,7 +531,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
         visit = visit.merge(dep, on=['k', 'r'], how='inner')
     else:
         visit = pd.DataFrame(columns=['k', 'r', 'j', 'u', 'ta_stamp', 'td_stamp', 'y_after'])
-        print("\n⚠️  UYARI: Rota bilgisi bulunamadı, itinerary boş.")
+        print("\n UYARI: Rota bilgisi bulunamadı, itinerary boş.")
     
     # Excel'e kaydet
     try:
@@ -549,19 +549,19 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
             deltadf.to_excel(writer, sheet_name='delta_jkr', index=False)
             visit.to_excel(writer, sheet_name='itinerary', index=False)
         
-        print(f"\n✅ Excel dosyası kaydedildi: {excel_path}")
+        print(f"\n Excel dosyası kaydedildi: {excel_path}")
     except Exception as e:
-        print(f"\n❌ Excel yazma hatası: {e}")
+        print(f"\n Excel yazma hatası: {e}")
         print(f"Alternatif CSV dosyaları oluşturuluyor...")
         csv_path = excel_path.replace('.xlsx', '_results.csv')
         opt_results.to_csv(csv_path, index=False)
-        print(f"✅ CSV dosyası kaydedildi: {csv_path}")
+        print(f" CSV dosyası kaydedildi: {csv_path}")
     
-    print(f"✅ Log dosyası: {log_path}")
+    print(f" Log dosyası: {log_path}")
     print(f"\n{'='*80}")
-    print(f"✅ Toplam varış zamanları (minimize): {total_arrival_times:.2f} dk")
-    print(f"✅ Toplam bekleme süresi (kısıtlı): {total_wait:.2f} dk (üst sınır: {EPS_WAIT})")
-    print(f"✅ Kalan bekleme payı: {EPS_WAIT - total_wait:.2f} dk")
+    print(f" Toplam varış zamanları (minimize): {total_arrival_times:.2f} dk")
+    print(f" Toplam bekleme süresi (kısıtlı): {total_wait:.2f} dk (üst sınır: {EPS_WAIT})")
+    print(f" Kalan bekleme payı: {EPS_WAIT - total_wait:.2f} dk")
     print(f"{'='*80}\n")
 
 elif m.status == GRB.INFEASIBLE:
@@ -571,13 +571,13 @@ elif m.status == GRB.INFEASIBLE:
     m.computeIIS()
     iis_file = f"infeasible_arrival_primary_{timestamp}.ilp"
     m.write(iis_file)
-    print(f"\n✅ IIS dosyası kaydedildi: {iis_file}")
+    print(f"\n IIS dosyası kaydedildi: {iis_file}")
     print("\nÇELİŞEN KISITLAR:")
     for c in m.getConstrs():
         if c.IISConstr:
             print(f"  - {c.ConstrName}")
 else:
-    print(f"\n❌ Çözüm bulunamadı. Gurobi Status = {m.status}")
+    print(f"\n Çözüm bulunamadı. Gurobi Status = {m.status}")
     print("Status açıklaması:")
     status_dict = {
         1: "LOADED",
