@@ -16,7 +16,7 @@ class TeeOutput:
     def write(self, text):
         for f in self.files:
             f.write(text)
-            f.flush()  # Anında yazsın
+            f.flush()
     
     def flush(self):
         for f in self.files:
@@ -409,7 +409,6 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
               for j in Nw for k in K for r in R if u[j, k, r].X > 0]
     udf = pd.DataFrame(u_data) if u_data else pd.DataFrame(columns=['var', 'j', 'k', 'r', 'u'])
     
-    # DÜZELTME: z değişkenleri (rota kullanımı)
     z_data = []
     for k in K:
         for r in R:

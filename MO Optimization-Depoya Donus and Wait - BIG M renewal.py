@@ -29,7 +29,7 @@ terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
 original_stdout = sys.stdout
 sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 
-print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
+print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 TIME_LIMIT = 1200
 MIP_GAP    = 0.03
@@ -119,55 +119,31 @@ q_product = dict(zip(P, products['area_m2']))
 o  = dict(zip(P, products['origin']))
 d  = dict(zip(P, products['destination']))
 
-<<<<<<< HEAD
-T_max = 480 
+T_max = 480
 C_max = 11
 e_min = 435
 Q_max = 20
 N_w_count = len(Nw)
 
+
 M_16 = T_max - e_min + C_max
-M_20 = T_max - e_min           
-M_21 = T_max                   
-M_22 = Q_max
-M_23 = Q_max + 10                
-=======
-
-# INPUT VERİLERİNDEN HESAPLANAN PARAMETRELER:
-T_max = 480      # Vardiya süresi (dakika)
-C_max = 11       # En uzun seyahat (dakika)
-e_min = 435      # En erken parça hazır olma (dakika - 07:15)
-Q_max = 20       # Maksimum araç kapasitesi (m²)
-N_w_count = len(Nw)  # İstasyon sayısı
-
-# TIGHT M HESAPLAMALARI:
-M_14 = T_max - e_min + C_max   # = 56.0 dk (Zaman tutarlılığı)
-M_18 = T_max - e_min           # = 45.0 dk (Alış-teslimat)
-M_19 = T_max                   # = 480.0 dk (Bekleme süresi)
-M_21_22 = Q_max                # = 20 m² (Kapasite) 
->>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
+M_20 = T_max - e_min
+M_22 = T_max
+M_24 = Q_max
+M_25 = Q_max
 
 epsilon = 0.1
 U = len(Nw)
-TIME_THRESHOLD = 5000
 
 print("\n" + "="*80)
-print("TIGHT BIG-M DEĞERLERİ TANIMLANDI")
+print("🔥 TIGHT BIG-M DEĞERLERİ (Kısıt Numaraları İle)")
 print("="*80)
-<<<<<<< HEAD
-print(f"M_16 (Zaman)       = {M_16:.1f} dk   (Naive: 10000 → İyileşme: 99.44%)")
-print(f"M_20 (Teslimat)    = {M_20:.1f} dk   (Naive: 10000 → İyileşme: 99.55%)")
-print(f"M_21 (Bekleme)     = {M_21:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
-print(f"M_22 (Kapasite)     = {M_22:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
-print(f"M_23 (Kapasite*)     = {M_23:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
-print(f"U (MTZ) = {U} = len(Nw) = {N_w_count} (zaten optimal)")
-=======
-print(f"M_14 (Zaman)       = {M_14:.1f} dk
-print(f"M_18 (Teslimat)    = {M_18:.1f} dk
-print(f"M_19 (Bekleme)     = {M_19:.1f} dk
-print(f"M_21_22 (Kapasite) = {M_21_22:.0f} m²
-print(f"U (MTZ) = {U} = len(Nw) = {N_w_count}
->>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
+print(f"M_16 (c16: Zaman)      = {M_16:.1f} dk")
+print(f"M_20 (c20: Teslimat)   = {M_20:.1f} dk")
+print(f"M_22 (c22: Bekleme)    = {M_22:.1f} dk")
+print(f"M_24 (c24: Kap. Alt)   = {M_24:.0f} m²")
+print(f"M_25 (c25: Kap. Üst)   = {M_25:.0f} m²")
+print(f"U (MTZ) = {U} = |Nw| = {N_w_count}")
 print("="*80 + "\n")
 # ============================================================================
 
@@ -176,7 +152,7 @@ print("VERİ YÜKLENDİ")
 print("="*80)
 print(f"|N|={len(N)}, |Nw|={len(Nw)}, |K|={len(K)}, |R|={len(R)}, |P|={len(P)}")
 print(f"TIGHT M VALUES:")
-print(f"  M_14={M_14:.1f}, M_18={M_18:.1f}, M_19={M_19:.1f}, M_21_22={M_21_22:.0f}")
+print(f"  M_16={M_16:.1f}, M_20={M_20:.1f}, M_22={M_22:.1f}, M_24={M_24:.0f}, M_25={M_25:.0f}")
 print(f"  U={U}, ε={epsilon}, EPS_WAIT={EPS_WAIT}")
 print("="*80 + "\n")
 
@@ -208,7 +184,7 @@ m.addConstr(obj2 <= EPS_WAIT, name="eps_wait_constraint")
 m.setObjective(obj1 + 0.001*obj2, GRB.MINIMIZE)
 
 print("="*80)
-print("MODEL: TOPLAM VARIŞ ZAMANLARI BİRİNCİL AMAÇ (TIGHT M İLE)")
+print("MODEL: TOPLAM VARIŞ ZAMANLARI BİRİNCİL AMAÇ")
 print("="*80)
 print(f"Birincil Amaç: Σ_k ta_hkr (Toplam Varış Zamanları)")
 print(f"İkincil Amaç:  Σ_p w_p ≤ {EPS_WAIT} dakika")
@@ -254,7 +230,7 @@ for p in P:
                 m.addConstr(lhs >= f[p, k, r], name=f"c12[{p},{k},{r}]")
 
 # =====================================================================
-# KISITLAR (13-14*): Zaman sıralaması
+# KISITLAR (13-15): Zaman sıralaması
 # =====================================================================
 for k in K:
     m.addConstr(td['h', k, 1] == 420, name=f"c13[{k}]")
@@ -263,11 +239,7 @@ for k in K:
         m.addConstr(ta['h', k, r] >= ta['h', k, r-1], name=f"c15[{k},{r}]")
 
 # =====================================================================
-<<<<<<< HEAD
-# KISITLAR (16-21): Zaman penceresi - TIGHT M KULLANILIYOR! 🔥
-=======
-# KISITLAR (14-19): Zaman penceresi - TIGHT M KULLANILIYOR! 
->>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
+# KISITLAR (16-22): Zaman penceresi - TIGHT M KULLANILIYOR! 🔥
 # =====================================================================
 for i in N:
     for j in N:
@@ -276,15 +248,8 @@ for i in N:
             for r in R:
                 if (i, j, k, r) in x:
                     cij = c.get((i, j), 0.0)
-<<<<<<< HEAD
-                    # KISIT 16 - TIGHT M_16 = 56 dk 🔥
                     m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M_16 * (1 - x[(i, j, k, r)]),
                                name=f"c16[{i},{j},{k},{r}]")
-=======
-                    # KISIT 14 - TIGHT M_14 = 56 dk 
-                    m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M_14 * (1 - x[(i, j, k, r)]),
-                               name=f"c14[{i},{j},{k},{r}]")
->>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
 
 for j in Nw:
     for k in K:
@@ -305,41 +270,30 @@ for p in P:
     if (op in N) and (dp in N):
         for k in K:
             for r in R:
-<<<<<<< HEAD
-                # KISIT 20 - TIGHT M_20 = 45 dk 🔥
-                m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_20 * (1 - f[p, k, r]),
-                           name=f"c20[{p},{k},{r}]")
+                m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_20 * (1 - f[p, k, r]), name=f"c20[{p},{k},{r}]")
+                
+# Depot varış-ayrılış kısıtı (c21)
+for k in K:
+    for r in R:
+        m.addConstr(ta['h', k, r] >= td['h', k, r], name=f"c21[{k},{r}]")
+
+for p in P:
+    dp = d[p]
     ep = e[p]
     for k in K:
         for r in R:
-            # KISIT 21 - TIGHT M_21 = 480 dk 🔥
-            m.addConstr(w[p] >= ta[dp, k, r] - ep - M_21 * (1 - f[p, k, r]),
-                       name=f"c21[{p},{k},{r}]")
+            m.addConstr(w[p] >= ta[dp, k, r] - ep - M_22 * (1 - f[p, k, r]), name=f"c22[{p},{k},{r}]")
 
 # =====================================================================
-# KISITLAR (21-24): Kapasite - TIGHT M KULLANILIYOR! 🔥🔥
-=======
-                # KISIT 18 - TIGHT M_18 = 45 dk 
-                m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_18 * (1 - f[p, k, r]),
-                           name=f"c18[{p},{k},{r}]")
-    ep = e[p]
-    for k in K:
-        for r in R:
-            # KISIT 19 - TIGHT M_19 = 480 dk 
-            m.addConstr(w[p] >= ta[dp, k, r] - ep - M_19 * (1 - f[p, k, r]),
-                       name=f"c19[{p},{k},{r}]")
-
-# =====================================================================
-# KISITLAR (20-23): Kapasite - TIGHT M KULLANILIYOR! 
->>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
+# KISITLAR (23-27): Kapasite
 # =====================================================================
 for j in Nw:
     for k in K:
         for r in R:
             load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if o[p] == j)
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if d[p] == j)
-            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"c21[{j},{k},{r}]")
-            m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c24[{j},{k},{r}]")
+            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"c23[{j},{k},{r}]")
+            m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c26[{j},{k},{r}]")
 
 for i in Nw:
     for j in Nw:
@@ -347,22 +301,12 @@ for i in Nw:
         for k in K:
             for r in R:
                 if (i, j, k, r) in x:
-<<<<<<< HEAD
-                    
-                    m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_22 * (1 - x[(i, j, k, r)]),
-=======
-                    # KISIT 21-22 - TIGHT M_21_22 = 20 m²
-                    m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_21_22 * (1 - x[(i, j, k, r)]),
-                               name=f"c21[{i},{j},{k},{r}]")
-                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_21_22 * (1 - x[(i, j, k, r)]),
->>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
-                               name=f"c22[{i},{j},{k},{r}]")
-                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_23 * (1 - x[(i, j, k, r)]),
-                               name=f"c23[{i},{j},{k},{r}]")
+                    m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_24 * (1 - x[(i, j, k, r)]), name=f"c24[{i},{j},{k},{r}]")
+                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_25 * (1 - x[(i, j, k, r)]), name=f"c25[{i},{j},{k},{r}]")
 
 for k in K:
     for r in R:
-        m.addConstr(y['h', k, r] == 0, name=f"yhome[{k},{r}]")
+        m.addConstr(y['h', k, r] == 0, name=f"c27[{k},{r}]")
 
 # =====================================================================
 # KISIT (28): Rota sıralaması
@@ -415,7 +359,7 @@ m.setParam('Presolve', 2)
 m.setParam('LogFile', log_path)
 m.update()
 
-print("🚀 OPTİMİZASYON BAŞLIYOR (TIGHT M İLE)...\n")
+print("OPTİMİZASYON BAŞLIYOR...\n")
 m.optimize()
 
 # =====================================================================
@@ -423,24 +367,20 @@ m.optimize()
 # =====================================================================
 if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     print("\n" + "="*80)
-    print("ÇÖZÜM BULUNDU - TIGHT M OPTİMİZASYONU")
+    print("ÇÖZÜM BULUNDU")
     print("="*80)
     
     if m.status == GRB.TIME_LIMIT:
-        print(f"\n  Zaman limiti aşıldı ({TIME_LIMIT}s)")
+        print(f"\n Zaman limiti aşıldı ({TIME_LIMIT}s)")
         print(f"En iyi bulunan çözüm: {m.objVal if m.SolCount > 0 else 'YOK'}")
     
     total_wait = sum(w[p].X for p in P if w[p].X is not None)
     total_arrival_times = sum(ta['h', k, r].X for k in K for r in R if ta['h', k, r].X is not None)
+    wait_slack = EPS_WAIT - total_wait
     
     opt_results = pd.DataFrame([{
         'model': 'tight_M_optimized',
-        'M_16': M_16,
-        'M_20': M_20,
-        'M_21': M_21,
-        'M_22': M_22,
-        'M_22': M_23,
-        'U_MTZ': U,
+        'objective': 'min_total_arrival',
         'obj_value': m.objVal if m.SolCount > 0 else None,
         'best_bound': getattr(m, 'objBound', None),
         'mip_gap': getattr(m, 'MIPGap', None),
@@ -448,10 +388,22 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
         'status': m.status,
         'total_wait_minutes': round(total_wait, 2),
         'total_arrival_times': round(total_arrival_times, 2),
-        '|N|': len(N), '|Nw|': len(Nw), '|K|': len(K), '|R|': len(R), '|P|': len(P)
+        'epsilon_wait_upper': EPS_WAIT,
+        'wait_slack_remaining': round(wait_slack, 2),
+        '|N|': len(N), 
+        '|Nw|': len(Nw), 
+        '|K|': len(K), 
+        '|R|': len(R), 
+        'KxR': len(K) * len(R),
+        'U_(|Nw|)': U,
+        'M_16': M_16,
+        'M_20': M_20,
+        'M_22': M_22,
+        'M_24': M_24,
+        'M_25': M_25
     }])
     
-    # Değişkenleri kaydet (önceki kod ile aynı)
+    # Değişkenleri detaylı kaydet
     x_data = [{'var': 'x', 'i': i, 'j': j, 'k': k, 'r': r, 'val': round(var.X, 4)} 
               for (i, j, k, r), var in x.items() if var.X > 0.5]
     xdf = pd.DataFrame(x_data) if x_data else pd.DataFrame(columns=['var', 'i', 'j', 'k', 'r', 'val'])
@@ -460,22 +412,148 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
               for p in P for k in K for r in R if f[p, k, r].X > 0.5]
     fdf = pd.DataFrame(f_data) if f_data else pd.DataFrame(columns=['var', 'p', 'k', 'r', 'val'])
     
+    # MTZ u değişkenleri
+    u_data = [{'var': 'u', 'j': j, 'k': k, 'r': r, 'u': int(u[j, k, r].X)} 
+              for j in Nw for k in K for r in R if u[j, k, r].X > 0.5]
+    udf = pd.DataFrame(u_data) if u_data else pd.DataFrame(columns=['var', 'j', 'k', 'r', 'u'])
+    
+    # Rota kullanımı (z_kr)
+    z_data = []
+    for k in K:
+        for r in R:
+            used = 1 if any(x[('h', j, k, r)].X > 0.5 for j in Nw if ('h', j, k, r) in x) else 0
+            z_data.append({'var': 'z', 'k': k, 'r': r, 'z': used})
+    zdf = pd.DataFrame(z_data)
+    
     wdf = pd.DataFrame([{'var': 'w', 'p': p, 'w_val': round(w[p].X, 4) if w[p].X else 0} for p in P])
+    
+    # Zaman değişkenleri
+    ta_data = []
+    for j in N:
+        for k in K:
+            for r in R:
+                time_val = round(ta[j, k, r].X, 4) if ta[j, k, r].X else 0
+                ta_data.append({
+                    'var': 'ta', 
+                    'node': j, 
+                    'k': k, 
+                    'r': r, 
+                    'time': time_val,
+                    'stamp': minutes_to_hhmm(time_val)
+                })
+    tadf = pd.DataFrame(ta_data)
+    
+    td_data = []
+    for j in N:
+        for k in K:
+            for r in R:
+                time_val = round(td[j, k, r].X, 4) if td[j, k, r].X else 0
+                td_data.append({
+                    'var': 'td', 
+                    'node': j, 
+                    'k': k, 
+                    'r': r, 
+                    'time': time_val,
+                    'stamp': minutes_to_hhmm(time_val)
+                })
+    tddf = pd.DataFrame(td_data)
+    
+    ts_data = []
+    for j in Nw:
+        for k in K:
+            for r in R:
+                time_val = round(ts[j, k, r].X, 4) if ts[j, k, r].X else 0
+                ts_data.append({
+                    'var': 'ts', 
+                    'node': j, 
+                    'k': k, 
+                    'r': r, 
+                    'time': time_val,
+                    'stamp': minutes_to_hhmm(time_val)
+                })
+    tsdf = pd.DataFrame(ts_data)
+    
+    # Yük değişkenleri
+    y_data = []
+    for j in N:
+        for k in K:
+            for r in R:
+                y_val = round(y[j, k, r].X, 4) if y[j, k, r].X else 0
+                if y_val > 0.01:  # Sadece anlamlı değerleri kaydet
+                    y_data.append({'var': 'y', 'node': j, 'k': k, 'r': r, 'y_val': y_val})
+    ydf = pd.DataFrame(y_data) if y_data else pd.DataFrame(columns=['var', 'node', 'k', 'r', 'y_val'])
+    
+    # Delta değişkenleri
+    delta_data = []
+    for j in Nw:
+        for k in K:
+            for r in R:
+                delta_val = round(delta[j, k, r].X, 4) if delta[j, k, r].X else 0
+                if abs(delta_val) > 0.01:  # Sadece anlamlı değerleri kaydet
+                    delta_data.append({'var': 'delta', 'node': j, 'k': k, 'r': r, 'delta_val': delta_val})
+    deltadf = pd.DataFrame(delta_data) if delta_data else pd.DataFrame(columns=['var', 'node', 'k', 'r', 'delta_val'])
+    
+    # Itinerary - Rota özeti
+    itinerary_data = []
+    for k in K:
+        for r in R:
+            # Bu rotada ziyaret edilen düğümleri bul
+            visited = [(j, int(u[j, k, r].X)) for j in Nw if u[j, k, r].X > 0.5]
+            visited.sort(key=lambda x: x[1])  # Sıraya göre sırala
+            
+            for node, seq in visited:
+                ta_val = ta[node, k, r].X if ta[node, k, r].X else 0
+                td_val = td[node, k, r].X if td[node, k, r].X else 0
+                y_val = y[node, k, r].X if y[node, k, r].X else None
+                
+                itinerary_data.append({
+                    'k': k,
+                    'r': r,
+                    'j': node,
+                    'u': seq,
+                    'ta_stamp': minutes_to_hhmm(ta_val),
+                    'td_stamp': minutes_to_hhmm(td_val),
+                    'y_after': y_val if y_val and y_val > 0.01 else None
+                })
+    
+    itinerary_df = pd.DataFrame(itinerary_data) if itinerary_data else pd.DataFrame(
+        columns=['k', 'r', 'j', 'u', 'ta_stamp', 'td_stamp', 'y_after'])
     
     try:
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
             opt_results.to_excel(writer, sheet_name='optimization_results', index=False)
             xdf.to_excel(writer, sheet_name='x_ijkr', index=False)
             fdf.to_excel(writer, sheet_name='f_pkr', index=False)
+            udf.to_excel(writer, sheet_name='u_jkr', index=False)
+            zdf.to_excel(writer, sheet_name='z_kr', index=False)
             wdf.to_excel(writer, sheet_name='w_p', index=False)
+            tadf.to_excel(writer, sheet_name='ta', index=False)
+            tddf.to_excel(writer, sheet_name='td', index=False)
+            tsdf.to_excel(writer, sheet_name='ts', index=False)
+            ydf.to_excel(writer, sheet_name='y_jkr', index=False)
+            deltadf.to_excel(writer, sheet_name='delta_jkr', index=False)
+            itinerary_df.to_excel(writer, sheet_name='itinerary', index=False)
         
         print(f"\n Excel dosyası kaydedildi: {excel_path}")
+        print(f"   12 sekme oluşturuldu:")
+        print(f"      1. optimization_results")
+        print(f"      2. x_ijkr")
+        print(f"      3. f_pkr")
+        print(f"      4. u_jkr")
+        print(f"      5. z_kr")
+        print(f"      6. w_p")
+        print(f"      7. ta (zaman damgalı)")
+        print(f"      8. td (zaman damgalı)")
+        print(f"      9. ts (zaman damgalı)")
+        print(f"     10. y_jkr")
+        print(f"     11. delta_jkr")
+        print(f"     12. itinerary")
     except Exception as e:
-        print(f"\n Excel yazma hatası: {e}")
+        print(f"\n❌ Excel yazma hatası: {e}")
     
-    print(f" Log dosyası: {log_path}")
+    print(f"✅ Log dosyası: {log_path}")
     print(f"\n{'='*80}")
-    print(f" TIGHT M İLE SONUÇLAR:")
+    print(f"🎯 TIGHT M İLE SONUÇLAR:")
     print(f"   Toplam varış: {total_arrival_times:.2f} dk")
     print(f"   Toplam bekleme: {total_wait:.2f} dk (üst sınır: {EPS_WAIT})")
     print(f"   Çözüm süresi: {m.Runtime:.2f} sn")
