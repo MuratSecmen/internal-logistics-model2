@@ -34,7 +34,7 @@ sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 print(f" Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 
-TIME_LIMIT = 1200
+TIME_LIMIT = 3600
 MIP_GAP    = 0.03
 THREADS    = 6
 EPS_WAIT = 150
@@ -74,7 +74,7 @@ desktop_dir = r"C:\Users\Asus\Desktop"
 # Veri dosyalarını yükle
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
+products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(30)
 
 def _read_dist(path, val_col):
     """Mesafe/süre matrisini oku"""
