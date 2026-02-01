@@ -553,7 +553,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     
     print(f"✅ Log dosyası: {log_path}")
     print(f"\n{'='*80}")
-    print(f"🎯 TIGHT M İLE SONUÇLAR:")
+    print(f"TIGHT M İLE SONUÇLAR:")
     print(f"   Toplam varış: {total_arrival_times:.2f} dk")
     print(f"   Toplam bekleme: {total_wait:.2f} dk (üst sınır: {EPS_WAIT})")
     print(f"   Çözüm süresi: {m.Runtime:.2f} sn")
