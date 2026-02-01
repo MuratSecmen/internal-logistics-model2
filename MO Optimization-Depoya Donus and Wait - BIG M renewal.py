@@ -29,7 +29,7 @@ terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
 original_stdout = sys.stdout
 sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 
-print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
+print(f" Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 TIME_LIMIT = 3600
 MIP_GAP    = 0.03
