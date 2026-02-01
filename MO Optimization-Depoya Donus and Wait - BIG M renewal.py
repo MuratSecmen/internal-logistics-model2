@@ -29,7 +29,7 @@ terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
 original_stdout = sys.stdout
 sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 
-print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
+print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 TIME_LIMIT = 1200
 MIP_GAP    = 0.03
@@ -119,6 +119,7 @@ q_product = dict(zip(P, products['area_m2']))
 o  = dict(zip(P, products['origin']))
 d  = dict(zip(P, products['destination']))
 
+<<<<<<< HEAD
 T_max = 480 
 C_max = 11
 e_min = 435
@@ -130,20 +131,43 @@ M_20 = T_max - e_min
 M_21 = T_max                   
 M_22 = Q_max
 M_23 = Q_max + 10                
+=======
+
+# INPUT VERİLERİNDEN HESAPLANAN PARAMETRELER:
+T_max = 480      # Vardiya süresi (dakika)
+C_max = 11       # En uzun seyahat (dakika)
+e_min = 435      # En erken parça hazır olma (dakika - 07:15)
+Q_max = 20       # Maksimum araç kapasitesi (m²)
+N_w_count = len(Nw)  # İstasyon sayısı
+
+# TIGHT M HESAPLAMALARI:
+M_14 = T_max - e_min + C_max   # = 56.0 dk (Zaman tutarlılığı)
+M_18 = T_max - e_min           # = 45.0 dk (Alış-teslimat)
+M_19 = T_max                   # = 480.0 dk (Bekleme süresi)
+M_21_22 = Q_max                # = 20 m² (Kapasite) 
+>>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
 
 epsilon = 0.1
 U = len(Nw)
 TIME_THRESHOLD = 5000
 
 print("\n" + "="*80)
-print("🔥 TIGHT BIG-M DEĞERLERİ TANIMLANDI")
+print("TIGHT BIG-M DEĞERLERİ TANIMLANDI")
 print("="*80)
+<<<<<<< HEAD
 print(f"M_16 (Zaman)       = {M_16:.1f} dk   (Naive: 10000 → İyileşme: 99.44%)")
 print(f"M_20 (Teslimat)    = {M_20:.1f} dk   (Naive: 10000 → İyileşme: 99.55%)")
 print(f"M_21 (Bekleme)     = {M_21:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
 print(f"M_22 (Kapasite)     = {M_22:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
 print(f"M_23 (Kapasite*)     = {M_23:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
 print(f"U (MTZ) = {U} = len(Nw) = {N_w_count} (zaten optimal)")
+=======
+print(f"M_14 (Zaman)       = {M_14:.1f} dk
+print(f"M_18 (Teslimat)    = {M_18:.1f} dk
+print(f"M_19 (Bekleme)     = {M_19:.1f} dk
+print(f"M_21_22 (Kapasite) = {M_21_22:.0f} m²
+print(f"U (MTZ) = {U} = len(Nw) = {N_w_count}
+>>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
 print("="*80 + "\n")
 # ============================================================================
 
@@ -239,7 +263,11 @@ for k in K:
         m.addConstr(ta['h', k, r] >= ta['h', k, r-1], name=f"c15[{k},{r}]")
 
 # =====================================================================
+<<<<<<< HEAD
 # KISITLAR (16-21): Zaman penceresi - TIGHT M KULLANILIYOR! 🔥
+=======
+# KISITLAR (14-19): Zaman penceresi - TIGHT M KULLANILIYOR! 
+>>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
 # =====================================================================
 for i in N:
     for j in N:
@@ -248,9 +276,15 @@ for i in N:
             for r in R:
                 if (i, j, k, r) in x:
                     cij = c.get((i, j), 0.0)
+<<<<<<< HEAD
                     # KISIT 16 - TIGHT M_16 = 56 dk 🔥
                     m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M_16 * (1 - x[(i, j, k, r)]),
                                name=f"c16[{i},{j},{k},{r}]")
+=======
+                    # KISIT 14 - TIGHT M_14 = 56 dk 
+                    m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M_14 * (1 - x[(i, j, k, r)]),
+                               name=f"c14[{i},{j},{k},{r}]")
+>>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
 
 for j in Nw:
     for k in K:
@@ -271,6 +305,7 @@ for p in P:
     if (op in N) and (dp in N):
         for k in K:
             for r in R:
+<<<<<<< HEAD
                 # KISIT 20 - TIGHT M_20 = 45 dk 🔥
                 m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_20 * (1 - f[p, k, r]),
                            name=f"c20[{p},{k},{r}]")
@@ -283,6 +318,20 @@ for p in P:
 
 # =====================================================================
 # KISITLAR (21-24): Kapasite - TIGHT M KULLANILIYOR! 🔥🔥
+=======
+                # KISIT 18 - TIGHT M_18 = 45 dk 
+                m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_18 * (1 - f[p, k, r]),
+                           name=f"c18[{p},{k},{r}]")
+    ep = e[p]
+    for k in K:
+        for r in R:
+            # KISIT 19 - TIGHT M_19 = 480 dk 
+            m.addConstr(w[p] >= ta[dp, k, r] - ep - M_19 * (1 - f[p, k, r]),
+                       name=f"c19[{p},{k},{r}]")
+
+# =====================================================================
+# KISITLAR (20-23): Kapasite - TIGHT M KULLANILIYOR! 
+>>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
 # =====================================================================
 for j in Nw:
     for k in K:
@@ -298,8 +347,15 @@ for i in Nw:
         for k in K:
             for r in R:
                 if (i, j, k, r) in x:
+<<<<<<< HEAD
                     
                     m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_22 * (1 - x[(i, j, k, r)]),
+=======
+                    # KISIT 21-22 - TIGHT M_21_22 = 20 m²
+                    m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_21_22 * (1 - x[(i, j, k, r)]),
+                               name=f"c21[{i},{j},{k},{r}]")
+                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_21_22 * (1 - x[(i, j, k, r)]),
+>>>>>>> 9a4ec2dd0a2e08ba4871c1681e727d9da4ed510d
                                name=f"c22[{i},{j},{k},{r}]")
                     m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_23 * (1 - x[(i, j, k, r)]),
                                name=f"c23[{i},{j},{k},{r}]")
@@ -367,11 +423,11 @@ m.optimize()
 # =====================================================================
 if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     print("\n" + "="*80)
-    print("✅ ÇÖZÜM BULUNDU - TIGHT M OPTİMİZASYONU")
+    print("ÇÖZÜM BULUNDU - TIGHT M OPTİMİZASYONU")
     print("="*80)
     
     if m.status == GRB.TIME_LIMIT:
-        print(f"\n⚠️  Zaman limiti aşıldı ({TIME_LIMIT}s)")
+        print(f"\n  Zaman limiti aşıldı ({TIME_LIMIT}s)")
         print(f"En iyi bulunan çözüm: {m.objVal if m.SolCount > 0 else 'YOK'}")
     
     total_wait = sum(w[p].X for p in P if w[p].X is not None)
@@ -413,13 +469,13 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
             fdf.to_excel(writer, sheet_name='f_pkr', index=False)
             wdf.to_excel(writer, sheet_name='w_p', index=False)
         
-        print(f"\n✅ Excel dosyası kaydedildi: {excel_path}")
+        print(f"\n Excel dosyası kaydedildi: {excel_path}")
     except Exception as e:
-        print(f"\n❌ Excel yazma hatası: {e}")
+        print(f"\n Excel yazma hatası: {e}")
     
-    print(f"✅ Log dosyası: {log_path}")
+    print(f" Log dosyası: {log_path}")
     print(f"\n{'='*80}")
-    print(f"🎯 TIGHT M İLE SONUÇLAR:")
+    print(f" TIGHT M İLE SONUÇLAR:")
     print(f"   Toplam varış: {total_arrival_times:.2f} dk")
     print(f"   Toplam bekleme: {total_wait:.2f} dk (üst sınır: {EPS_WAIT})")
     print(f"   Çözüm süresi: {m.Runtime:.2f} sn")
@@ -428,15 +484,15 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
 
 elif m.status == GRB.INFEASIBLE:
     print("\n" + "="*80)
-    print("❌ MODEL INFEASIBLE")
+    print(" MODEL INFEASIBLE")
     print("="*80)
     m.computeIIS()
     iis_file = f"infeasible_tightM_{timestamp}.ilp"
     m.write(iis_file)
-    print(f"\n✅ IIS dosyası: {iis_file}")
+    print(f"\n IIS dosyası: {iis_file}")
 
 else:
-    print(f"\n❌ Çözüm bulunamadı. Status = {m.status}")
+    print(f"\n Çözüm bulunamadı. Status = {m.status}")
 
 print("\n" + "="*80)
 print("PROGRAM TAMAMLANDI")
