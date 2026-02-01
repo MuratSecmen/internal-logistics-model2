@@ -142,7 +142,7 @@ print("="*80 + "\n")
 # =====================================================================
 # MODEL OLUŞTURMA
 # =====================================================================
-m = gp.Model("InternalLogistics_MinArrival_Primary")
+m = gp.Model("InternalLogistics_ReturningDepotTime_Primary")
 
 # =====================================================================
 # KARAR DEĞİŞKENLERİ
@@ -178,57 +178,57 @@ print(f"Eklenen Kısıt (13*):      ta_hkr ≥ ta_hk(r-1)")
 print("="*80 + "\n")
 
 # =====================================================================
-# KISITLAR (3-11): Rota ve atama kısıtları
+# KISITLAR (4-12): Rota ve atama kısıtları
 # =====================================================================
 for k in K:
     for r in R:
         out_h = quicksum(x[('h', j, k, r)] for j in Nw if ('h', j, k, r) in x)
         in_h  = quicksum(x[(j, 'h', k, r)] for j in Nw if (j, 'h', k, r) in x)
-        m.addConstr(out_h == in_h, name=f"c3[{k},{r}]")
-        m.addConstr(out_h <= 1, name=f"c4[{k},{r}]")
+        m.addConstr(out_h == in_h, name=f"c4[{k},{r}]")
+        m.addConstr(out_h <= 1, name=f"c5[{k},{r}]")
         lhs = quicksum(x[(i, j, k, r)] for i in N for j in N if (i, j, k, r) in x)
         rhs = quicksum(f[p, k, r] for p in P)
-        m.addConstr(lhs <= (2*len(P)+1)*rhs, name=f"c5[{k},{r}]")
+        m.addConstr(lhs <= (2*len(P)+1)*rhs, name=f"c6[{k},{r}]")
 
 for j in Nw:
     for k in K:
         for r in R:
             lhs = quicksum(x[(i, j, k, r)] for i in N if i != j and (i, j, k, r) in x)
             rhs = quicksum(f[p, k, r] for p in P if (o[p] == j or d[p] == j))
-            m.addConstr(lhs <= rhs, name=f"c6[{j},{k},{r}]")
+            m.addConstr(lhs <= rhs, name=f"c7[{j},{k},{r}]")
             inflow  = quicksum(x[(i, j, k, r)] for i in N if i != j and (i, j, k, r) in x)
             outflow = quicksum(x[(j, i, k, r)] for i in N if i != j and (j, i, k, r) in x)
-            m.addConstr(inflow == outflow, name=f"c7[{j},{k},{r}]")
-            m.addConstr(inflow <= 1, name=f"c8[{j},{k},{r}]")
+            m.addConstr(inflow == outflow, name=f"c8[{j},{k},{r}]")
+            m.addConstr(inflow <= 1, name=f"c9[{j},{k},{r}]")
 
 for p in P:
-    m.addConstr(quicksum(f[p, k, r] for k in K for r in R) == 1, name=f"c9[{p}]")
+    m.addConstr(quicksum(f[p, k, r] for k in K for r in R) == 1, name=f"c10[{p}]")
     op = o[p]
     if op in N:
         for k in K:
             for r in R:
                 lhs = quicksum(x[(i, op, k, r)] for i in N if i != op and (i, op, k, r) in x)
-                m.addConstr(lhs >= f[p, k, r], name=f"c10[{p},{k},{r}]")
+                m.addConstr(lhs >= f[p, k, r], name=f"c11[{p},{k},{r}]")
     dp = d[p]
     if dp in N:
         for k in K:
             for r in R:
                 lhs = quicksum(x[(i, dp, k, r)] for i in N if i != dp and (i, dp, k, r) in x)
-                m.addConstr(lhs >= f[p, k, r], name=f"c11[{p},{k},{r}]")
+                m.addConstr(lhs >= f[p, k, r], name=f"c12[{p},{k},{r}]")
 
 # =====================================================================
-# KISITLAR (12-13*): Zaman sıralaması
+# KISITLAR (13-14*): Zaman sıralaması
 # =====================================================================
 for k in K:
-    m.addConstr(td['h', k, 1] == 0, name=f"c12[{k}]")
+    m.addConstr(td['h', k, 1] == 420, name=f"c13[{k}]")
     for r in R[1:]:
-        # KISIT (13): Ayrılış zamanı önceki varıştan sonra olmalı
-        m.addConstr(td['h', k, r] >= ta['h', k, r-1] + epsilon, name=f"c13[{k},{r}]")
-        # KISIT (13*): Varış zamanları monoton artan
-        m.addConstr(ta['h', k, r] >= ta['h', k, r-1], name=f"c13_star[{k},{r}]")
+        # KISIT (14): Ayrılış zamanı önceki varıştan sonra olmalı
+        m.addConstr(td['h', k, r] >= ta['h', k, r-1] + epsilon, name=f"c14[{k},{r}]")
+        # KISIT (14*): Varış zamanları monoton artan
+        m.addConstr(ta['h', k, r] >= ta['h', k, r-1], name=f"c14_star[{k},{r}]")
 
 # =====================================================================
-# KISITLAR (14-19): Zaman penceresi ve servis süreleri
+# KISITLAR (15-20): Zaman penceresi ve servis süreleri
 # =====================================================================
 for i in N:
     for j in N:
@@ -238,15 +238,15 @@ for i in N:
                 if (i, j, k, r) in x:
                     cij = c.get((i, j), 0.0)
                     m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M * (1 - x[(i, j, k, r)]),
-                               name=f"c14[{i},{j},{k},{r}]")
+                               name=f"c15[{i},{j},{k},{r}]")
 
 for j in Nw:
     for k in K:
         for r in R:
             unload = quicksum(su[p] * f[p, k, r] for p in P if d[p] == j)
-            m.addConstr(ts[j, k, r] >= ta[j, k, r] + unload, name=f"c15[{j},{k},{r}]")
+            m.addConstr(ts[j, k, r] >= ta[j, k, r] + unload, name=f"c16[{j},{k},{r}]")
             load = quicksum(sl[p] * f[p, k, r] for p in P if o[p] == j)
-            m.addConstr(td[j, k, r] >= ts[j, k, r] + load, name=f"c17[{j},{k},{r}]")
+            m.addConstr(td[j, k, r] >= ts[j, k, r] + load, name=f"c18[{j},{k},{r}]")
 
 for p in P:
     op = o[p]
@@ -254,29 +254,29 @@ for p in P:
         ep = e[p]
         for k in K:
             for r in R:
-                m.addConstr(ts[op, k, r] >= ep * f[p, k, r], name=f"c16[{p},{k},{r}]")
+                m.addConstr(ts[op, k, r] >= ep * f[p, k, r], name=f"c17[{p},{k},{r}]")
     op, dp = o[p], d[p]
     if (op in N) and (dp in N):
         for k in K:
             for r in R:
                 m.addConstr(ta[dp, k, r] >= td[op, k, r] - M * (1 - f[p, k, r]),
-                           name=f"c18[{p},{k},{r}]")
+                           name=f"c19[{p},{k},{r}]")
     ep = e[p]
     for k in K:
         for r in R:
             m.addConstr(w[p] >= ta[dp, k, r] - ep - M * (1 - f[p, k, r]),
-                       name=f"c19[{p},{k},{r}]")
+                       name=f"c20[{p},{k},{r}]")
 
 # =====================================================================
-# KISITLAR (20-23): Kapasite kısıtları
+# KISITLAR (21-24): Kapasite kısıtları
 # =====================================================================
 for j in Nw:
     for k in K:
         for r in R:
             load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if o[p] == j)
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if d[p] == j)
-            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"c20[{j},{k},{r}]")
-            m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c23[{j},{k},{r}]")
+            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"c21[{j},{k},{r}]")
+            m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c24[{j},{k},{r}]")
 
 for i in Nw:
     for j in Nw:
@@ -285,25 +285,25 @@ for i in Nw:
             for r in R:
                 if (i, j, k, r) in x:
                     m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M * (1 - x[(i, j, k, r)]),
-                               name=f"c21[{i},{j},{k},{r}]")
-                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M * (1 - x[(i, j, k, r)]),
                                name=f"c22[{i},{j},{k},{r}]")
+                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M * (1 - x[(i, j, k, r)]),
+                               name=f"c23[{i},{j},{k},{r}]")
 
 for k in K:
     for r in R:
         m.addConstr(y['h', k, r] == 0, name=f"yhome[{k},{r}]")
 
 # =====================================================================
-# KISIT (24): Rota sıralaması
+# KISIT (25): Rota sıralaması
 # =====================================================================
 for k in K:
     for r in R[:-1]:
         lhs = quicksum(x[('h', j, k, r)] for j in Nw if ('h', j, k, r) in x)
         rhs = quicksum(x[('h', j, k, r+1)] for j in Nw if ('h', j, k, r+1) in x)
-        m.addConstr(lhs >= rhs, name=f"c24[{k},{r}]")
+        m.addConstr(lhs >= rhs, name=f"c25[{k},{r}]")
 
 # =====================================================================
-# KISITLAR (25-28): Alt tur eliminasyonu
+# KISITLAR (26-29): Alt tur eliminasyonu
 # =====================================================================
 for i in Nw:
     for j in Nw:
@@ -312,14 +312,14 @@ for i in Nw:
             for r in R:
                 if (i, j, k, r) in x:
                     m.addConstr(u[j, k, r] >= u[i, k, r] + 1 - U * (1 - x[(i, j, k, r)]),
-                               name=f"c25[{i},{j},{k},{r}]")
+                               name=f"c26[{i},{j},{k},{r}]")
 
 for j in Nw:
     for k in K:
         for r in R:
             indeg = quicksum(x[(i, j, k, r)] for i in N if i != j and (i, j, k, r) in x)
-            m.addConstr(u[j, k, r] <= U * indeg, name=f"c26[{j},{k},{r}]")
-            m.addConstr(u[j, k, r] >= indeg, name=f"c27[{j},{k},{r}]")
+            m.addConstr(u[j, k, r] <= U * indeg, name=f"c27[{j},{k},{r}]")
+            m.addConstr(u[j, k, r] >= indeg, name=f"c28[{j},{k},{r}]")
 
 for k in K:
     for r in R:
@@ -327,7 +327,7 @@ for k in K:
             op, dp = o[p], d[p]
             if (op in Nw) and (dp in Nw):
                 m.addConstr(u[dp, k, r] >= u[op, k, r] + 1 - U * (1 - f[p, k, r]),
-                           name=f"c28[{p},{k},{r}]")
+                           name=f"c29[{p},{k},{r}]")
 
 """
    # Parçayı V3'e, Rota 1'e ata
@@ -409,7 +409,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
               for j in Nw for k in K for r in R if u[j, k, r].X > 0]
     udf = pd.DataFrame(u_data) if u_data else pd.DataFrame(columns=['var', 'j', 'k', 'r', 'u'])
     
-    # ✅ DÜZELTME: z değişkenleri (rota kullanımı)
+    # DÜZELTME: z değişkenleri (rota kullanımı)
     z_data = []
     for k in K:
         for r in R:

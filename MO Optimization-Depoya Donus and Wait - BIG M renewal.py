@@ -31,7 +31,7 @@ sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 
 print(f"✅ Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
-TIME_LIMIT = 600
+TIME_LIMIT = 1200
 MIP_GAP    = 0.03
 THREADS    = 6
 EPS_WAIT = 150
@@ -119,36 +119,30 @@ q_product = dict(zip(P, products['area_m2']))
 o  = dict(zip(P, products['origin']))
 d  = dict(zip(P, products['destination']))
 
-# ============================================================================
-# TIGHT BIG-M DEĞERLERİ - Optimizasyon (30 Ocak 2025)
-# ============================================================================
-# SENİN VERİLERİNDEN HESAPLANAN PARAMETRELER:
-T_max = 480      # Vardiya süresi (dakika)
-C_max = 11       # En uzun seyahat (dakika)
-e_min = 435      # En erken parça hazır olma (dakika - 07:15)
-Q_max = 20       # Maksimum araç kapasitesi (m²)
-N_w_count = len(Nw)  # İstasyon sayısı
+T_max = 480 
+C_max = 11
+e_min = 435
+Q_max = 20
+N_w_count = len(Nw)
 
-# TIGHT M HESAPLAMALARI (99.4-99.8% İYİLEŞME!):
-M_14 = T_max - e_min + C_max  # = 56.0 dk (Zaman tutarlılığı)
-M_18 = T_max - e_min           # = 45.0 dk (Alış-teslimat)
-M_19 = T_max                   # = 480.0 dk (Bekleme süresi)
-M_21_22 = Q_max                # = 20 m² (Kapasite) 🔥
-
-# ESKİ NAIVE M (artık kullanılmıyor)
-# M = 10000.0  # ❌ ESKİ DEĞER
+M_16 = T_max - e_min + C_max
+M_20 = T_max - e_min           
+M_21 = T_max                   
+M_22 = Q_max
+M_23 = Q_max + 10                
 
 epsilon = 0.1
-U = len(Nw)  # MTZ için (zaten optimal)
+U = len(Nw)
 TIME_THRESHOLD = 5000
 
 print("\n" + "="*80)
 print("🔥 TIGHT BIG-M DEĞERLERİ TANIMLANDI")
 print("="*80)
-print(f"M_14 (Zaman)       = {M_14:.1f} dk   (Naive: 10000 → İyileşme: 99.44%)")
-print(f"M_18 (Teslimat)    = {M_18:.1f} dk   (Naive: 10000 → İyileşme: 99.55%)")
-print(f"M_19 (Bekleme)     = {M_19:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
-print(f"M_21_22 (Kapasite) = {M_21_22:.0f} m²   (Naive: 10000 → İyileşme: 99.80%) 🔥")
+print(f"M_16 (Zaman)       = {M_16:.1f} dk   (Naive: 10000 → İyileşme: 99.44%)")
+print(f"M_20 (Teslimat)    = {M_20:.1f} dk   (Naive: 10000 → İyileşme: 99.55%)")
+print(f"M_21 (Bekleme)     = {M_21:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
+print(f"M_22 (Kapasite)     = {M_22:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
+print(f"M_23 (Kapasite*)     = {M_23:.1f} dk   (Naive: 10000 → İyileşme: 95.20%)")
 print(f"U (MTZ) = {U} = len(Nw) = {N_w_count} (zaten optimal)")
 print("="*80 + "\n")
 # ============================================================================
@@ -197,55 +191,55 @@ print(f"İkincil Amaç:  Σ_p w_p ≤ {EPS_WAIT} dakika")
 print("="*80 + "\n")
 
 # =====================================================================
-# KISITLAR (3-11): Rota ve atama kısıtları
+# KISITLAR (4-12): Rota ve atama kısıtları
 # =====================================================================
 for k in K:
     for r in R:
         out_h = quicksum(x[('h', j, k, r)] for j in Nw if ('h', j, k, r) in x)
         in_h  = quicksum(x[(j, 'h', k, r)] for j in Nw if (j, 'h', k, r) in x)
-        m.addConstr(out_h == in_h, name=f"c3[{k},{r}]")
-        m.addConstr(out_h <= 1, name=f"c4[{k},{r}]")
+        m.addConstr(out_h == in_h, name=f"c4[{k},{r}]")
+        m.addConstr(out_h <= 1, name=f"c5[{k},{r}]")
         lhs = quicksum(x[(i, j, k, r)] for i in N for j in N if (i, j, k, r) in x)
         rhs = quicksum(f[p, k, r] for p in P)
-        m.addConstr(lhs <= (2*len(P)+1)*rhs, name=f"c5[{k},{r}]")
+        m.addConstr(lhs <= (2*len(P)+1)*rhs, name=f"c6[{k},{r}]")
 
 for j in Nw:
     for k in K:
         for r in R:
             lhs = quicksum(x[(i, j, k, r)] for i in N if i != j and (i, j, k, r) in x)
             rhs = quicksum(f[p, k, r] for p in P if (o[p] == j or d[p] == j))
-            m.addConstr(lhs <= rhs, name=f"c6[{j},{k},{r}]")
+            m.addConstr(lhs <= rhs, name=f"c7[{j},{k},{r}]")
             inflow  = quicksum(x[(i, j, k, r)] for i in N if i != j and (i, j, k, r) in x)
             outflow = quicksum(x[(j, i, k, r)] for i in N if i != j and (j, i, k, r) in x)
-            m.addConstr(inflow == outflow, name=f"c7[{j},{k},{r}]")
-            m.addConstr(inflow <= 1, name=f"c8[{j},{k},{r}]")
+            m.addConstr(inflow == outflow, name=f"c8[{j},{k},{r}]")
+            m.addConstr(inflow <= 1, name=f"c9[{j},{k},{r}]")
 
 for p in P:
-    m.addConstr(quicksum(f[p, k, r] for k in K for r in R) == 1, name=f"c9[{p}]")
+    m.addConstr(quicksum(f[p, k, r] for k in K for r in R) == 1, name=f"c10[{p}]")
     op = o[p]
     if op in N:
         for k in K:
             for r in R:
                 lhs = quicksum(x[(i, op, k, r)] for i in N if i != op and (i, op, k, r) in x)
-                m.addConstr(lhs >= f[p, k, r], name=f"c10[{p},{k},{r}]")
+                m.addConstr(lhs >= f[p, k, r], name=f"c11[{p},{k},{r}]")
     dp = d[p]
     if dp in N:
         for k in K:
             for r in R:
                 lhs = quicksum(x[(i, dp, k, r)] for i in N if i != dp and (i, dp, k, r) in x)
-                m.addConstr(lhs >= f[p, k, r], name=f"c11[{p},{k},{r}]")
+                m.addConstr(lhs >= f[p, k, r], name=f"c12[{p},{k},{r}]")
 
 # =====================================================================
-# KISITLAR (12-13*): Zaman sıralaması
+# KISITLAR (13-14*): Zaman sıralaması
 # =====================================================================
 for k in K:
-    m.addConstr(td['h', k, 1] == 0, name=f"c12[{k}]")
+    m.addConstr(td['h', k, 1] == 420, name=f"c13[{k}]")
     for r in R[1:]:
-        m.addConstr(td['h', k, r] >= ta['h', k, r-1] + epsilon, name=f"c13[{k},{r}]")
-        m.addConstr(ta['h', k, r] >= ta['h', k, r-1], name=f"c13_star[{k},{r}]")
+        m.addConstr(td['h', k, r] >= ta['h', k, r-1] + epsilon, name=f"c14[{k},{r}]")
+        m.addConstr(ta['h', k, r] >= ta['h', k, r-1], name=f"c15[{k},{r}]")
 
 # =====================================================================
-# KISITLAR (14-19): Zaman penceresi - TIGHT M KULLANILIYOR! 🔥
+# KISITLAR (16-21): Zaman penceresi - TIGHT M KULLANILIYOR! 🔥
 # =====================================================================
 for i in N:
     for j in N:
@@ -254,17 +248,17 @@ for i in N:
             for r in R:
                 if (i, j, k, r) in x:
                     cij = c.get((i, j), 0.0)
-                    # KISIT 14 - TIGHT M_14 = 56 dk 🔥
-                    m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M_14 * (1 - x[(i, j, k, r)]),
-                               name=f"c14[{i},{j},{k},{r}]")
+                    # KISIT 16 - TIGHT M_16 = 56 dk 🔥
+                    m.addConstr(ta[j, k, r] >= td[i, k, r] + cij * x[(i, j, k, r)] - M_16 * (1 - x[(i, j, k, r)]),
+                               name=f"c16[{i},{j},{k},{r}]")
 
 for j in Nw:
     for k in K:
         for r in R:
             unload = quicksum(su[p] * f[p, k, r] for p in P if d[p] == j)
-            m.addConstr(ts[j, k, r] >= ta[j, k, r] + unload, name=f"c15[{j},{k},{r}]")
+            m.addConstr(ts[j, k, r] >= ta[j, k, r] + unload, name=f"c17[{j},{k},{r}]")
             load = quicksum(sl[p] * f[p, k, r] for p in P if o[p] == j)
-            m.addConstr(td[j, k, r] >= ts[j, k, r] + load, name=f"c17[{j},{k},{r}]")
+            m.addConstr(td[j, k, r] >= ts[j, k, r] + load, name=f"c19[{j},{k},{r}]")
 
 for p in P:
     op = o[p]
@@ -272,31 +266,31 @@ for p in P:
         ep = e[p]
         for k in K:
             for r in R:
-                m.addConstr(ts[op, k, r] >= ep * f[p, k, r], name=f"c16[{p},{k},{r}]")
+                m.addConstr(ts[op, k, r] >= ep * f[p, k, r], name=f"c18[{p},{k},{r}]")
     op, dp = o[p], d[p]
     if (op in N) and (dp in N):
         for k in K:
             for r in R:
-                # KISIT 18 - TIGHT M_18 = 45 dk 🔥
-                m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_18 * (1 - f[p, k, r]),
-                           name=f"c18[{p},{k},{r}]")
+                # KISIT 20 - TIGHT M_20 = 45 dk 🔥
+                m.addConstr(ta[dp, k, r] >= td[op, k, r] - M_20 * (1 - f[p, k, r]),
+                           name=f"c20[{p},{k},{r}]")
     ep = e[p]
     for k in K:
         for r in R:
-            # KISIT 19 - TIGHT M_19 = 480 dk 🔥
-            m.addConstr(w[p] >= ta[dp, k, r] - ep - M_19 * (1 - f[p, k, r]),
-                       name=f"c19[{p},{k},{r}]")
+            # KISIT 21 - TIGHT M_21 = 480 dk 🔥
+            m.addConstr(w[p] >= ta[dp, k, r] - ep - M_21 * (1 - f[p, k, r]),
+                       name=f"c21[{p},{k},{r}]")
 
 # =====================================================================
-# KISITLAR (20-23): Kapasite - TIGHT M KULLANILIYOR! 🔥🔥
+# KISITLAR (21-24): Kapasite - TIGHT M KULLANILIYOR! 🔥🔥
 # =====================================================================
 for j in Nw:
     for k in K:
         for r in R:
             load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if o[p] == j)
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if d[p] == j)
-            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"c20[{j},{k},{r}]")
-            m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c23[{j},{k},{r}]")
+            m.addConstr(delta[j, k, r] >= load_in - load_out, name=f"c21[{j},{k},{r}]")
+            m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c24[{j},{k},{r}]")
 
 for i in Nw:
     for j in Nw:
@@ -304,27 +298,27 @@ for i in Nw:
         for k in K:
             for r in R:
                 if (i, j, k, r) in x:
-                    # KISIT 21-22 - TIGHT M_21_22 = 20 m² 🔥🔥🔥 (EN BÜYÜK İYİLEŞME!)
-                    m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_21_22 * (1 - x[(i, j, k, r)]),
-                               name=f"c21[{i},{j},{k},{r}]")
-                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_21_22 * (1 - x[(i, j, k, r)]),
+                    
+                    m.addConstr(y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_22 * (1 - x[(i, j, k, r)]),
                                name=f"c22[{i},{j},{k},{r}]")
+                    m.addConstr(y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_23 * (1 - x[(i, j, k, r)]),
+                               name=f"c23[{i},{j},{k},{r}]")
 
 for k in K:
     for r in R:
         m.addConstr(y['h', k, r] == 0, name=f"yhome[{k},{r}]")
 
 # =====================================================================
-# KISIT (24): Rota sıralaması
+# KISIT (28): Rota sıralaması
 # =====================================================================
 for k in K:
     for r in R[:-1]:
         lhs = quicksum(x[('h', j, k, r)] for j in Nw if ('h', j, k, r) in x)
         rhs = quicksum(x[('h', j, k, r+1)] for j in Nw if ('h', j, k, r+1) in x)
-        m.addConstr(lhs >= rhs, name=f"c24[{k},{r}]")
+        m.addConstr(lhs >= rhs, name=f"c28[{k},{r}]")
 
 # =====================================================================
-# KISITLAR (25-28): Alt tur eliminasyonu (U zaten optimal)
+# KISITLAR (29-32): Alt tur eliminasyonu (U zaten optimal)
 # =====================================================================
 for i in Nw:
     for j in Nw:
@@ -333,14 +327,14 @@ for i in Nw:
             for r in R:
                 if (i, j, k, r) in x:
                     m.addConstr(u[j, k, r] >= u[i, k, r] + 1 - U * (1 - x[(i, j, k, r)]),
-                               name=f"c25[{i},{j},{k},{r}]")
+                               name=f"c29[{i},{j},{k},{r}]")
 
 for j in Nw:
     for k in K:
         for r in R:
             indeg = quicksum(x[(i, j, k, r)] for i in N if i != j and (i, j, k, r) in x)
-            m.addConstr(u[j, k, r] <= U * indeg, name=f"c26[{j},{k},{r}]")
-            m.addConstr(u[j, k, r] >= indeg, name=f"c27[{j},{k},{r}]")
+            m.addConstr(u[j, k, r] <= U * indeg, name=f"c30[{j},{k},{r}]")
+            m.addConstr(u[j, k, r] >= indeg, name=f"c31[{j},{k},{r}]")
 
 for k in K:
     for r in R:
@@ -348,7 +342,7 @@ for k in K:
             op, dp = o[p], d[p]
             if (op in Nw) and (dp in Nw):
                 m.addConstr(u[dp, k, r] >= u[op, k, r] + 1 - U * (1 - f[p, k, r]),
-                           name=f"c28[{p},{k},{r}]")
+                           name=f"c32[{p},{k},{r}]")
 
 # =====================================================================
 # MODEL PARAMETRELERİ VE OPTİMİZASYON
@@ -385,10 +379,11 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     
     opt_results = pd.DataFrame([{
         'model': 'tight_M_optimized',
-        'M_14': M_14,
-        'M_18': M_18,
-        'M_19': M_19,
-        'M_21_22': M_21_22,
+        'M_16': M_16,
+        'M_20': M_20,
+        'M_21': M_21,
+        'M_22': M_22,
+        'M_22': M_23,
         'U_MTZ': U,
         'obj_value': m.objVal if m.SolCount > 0 else None,
         'best_bound': getattr(m, 'objBound', None),
