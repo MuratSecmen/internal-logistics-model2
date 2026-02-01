@@ -136,7 +136,7 @@ epsilon = 0.1
 U = len(Nw)
 
 print("\n" + "="*80)
-print("🔥 TIGHT BIG-M DEĞERLERİ (Kısıt Numaraları İle)")
+print("TIGHT BIG-M DEĞERLERİ (Kısıt Numaraları İle)")
 print("="*80)
 print(f"M_16 (c16: Zaman)      = {M_16:.1f} dk")
 print(f"M_20 (c20: Teslimat)   = {M_20:.1f} dk")
