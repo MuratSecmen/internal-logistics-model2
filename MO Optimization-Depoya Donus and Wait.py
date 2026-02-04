@@ -74,7 +74,7 @@ desktop_dir = r"C:\Users\Asus\Desktop"
 # Veri dosyalarını yükle
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(30)
+products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(20)
 
 def _read_dist(path, val_col):
     """Mesafe/süre matrisini oku"""
