@@ -32,7 +32,7 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 # =====================================================================
 # PARAMETERS
 # =====================================================================
-TIME_LIMIT = 144000
+TIME_LIMIT = 600
 MIP_GAP    = 0.03
 THREADS    = 6
 EPS_WAIT   = 150
