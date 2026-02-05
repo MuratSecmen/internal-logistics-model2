@@ -15,13 +15,13 @@
 ## Dosya Yapısı
 ```
 project/
-├── nodes.xlsx                 # Düğümler: depot (h) + work stations
-├── vehicles.xlsx              # Araç kapasiteleri (m²)
-├── products.xlsx              # Ürün özellikleri, ready_time, load/unload süreleri
-├── distances - dakika.xlsx    # Düğümler arası seyahat süreleri (cᵢⱼ)
-├── model_tight_bigm.py       # Önerilen: Tight Big-M versiyonu
-├── model_unified_bigm.py     # Unified Big-M versiyonu (M=9999)
-└── results/                   # Optimizasyon sonuçları
+├── nodes.xlsx
+├── vehicles.xlsx
+├── products.xlsx
+├── distances - dakika.xlsx
+├── model_tight_bigm.py
+├── model_unified_bigm.py
+└── results/
 ```
 
 ## Matematiksel Model
@@ -30,7 +30,7 @@ project/
 | Değişken | Tip | Tanım |
 |----------|-----|-------|
 | xᵢⱼₖᵣ | Binary | Araç k, rota r'de i→j hareketi |
-| fₚₖᵣ | Binary | Ürün p atama |
+| fₚₖᵣ | Binary | Parça p atama |
 | wₚ | Continuous | Parça p bekleme süresi |
 | taᵢₖᵣ, tdᵢₖᵣ | Continuous | Varış/ayrılış zamanları |
 | yⱼₖᵣ | Continuous | Düğüm j'deki yük (m²) |
@@ -38,8 +38,8 @@ project/
 
 ### Kritik Kısıt Grupları
 1. **Rota Yapısı (C4-C9):** Flow conservation, route closure
-2. **Atama (C10-C12):** Her ürün bir kez, pickup-delivery ziyaret
-3. **Zaman (C13-C22):** Time windows, pickup-delivery precedence
+2. **Atama (C10-C12):** Her parça bir kez, pickup-delivery ziyaret
+3. **Zaman (C13-C22):** Time related issues, pickup-delivery precedence
 4. **Kapasite (C23-C27):** Araç kapasitesi, yük akışı
 5. **Subtour (C29-C32):** Miller-Tucker-Zemlin (MTZ) formulation
 
@@ -51,16 +51,16 @@ project/
 | C16 (Time consistency) | 56.0 | T_max - e_min + C_max |
 | C20 (Pickup-delivery) | 45.0 | T_max - e_min |
 | C22 (Waiting time) | 480.0 | T_max |
-| C24-C25 (Load flow) | 20.0 | Q_max (🔥 50,000× improvement) |
+| C24-C25 (Load flow) | 20.0 | Q_max |
 | C29 (MTZ) | 21 | \|Nw\| |
 
-**Performans (10 ürün):** 287s solve time, 2.15% MIP gap, 12,458 nodes
+**Performans (10 parça):** 287s solve time, 2.15% MIP gap, 12,458 nodes
 
 ### Unified Big-M (Development/Testing)
 | Tüm Constraint'ler | M=9999 |
 |-------------------|---------|
 
-**Performans (10 ürün):** 756s solve time, 2.87% MIP gap, 41,923 nodes
+**Performans (10 parça):** 756s solve time, 2.87% MIP gap, 41,923 nodes
 
 ## Kullanım
 
@@ -87,32 +87,31 @@ python model_unified_bigm.py
 
 ## Gurobi Parametreleri
 ```python
-TimeLimit: 600s (10 dakika)
-MIPGap: 0.03 (%3 optimality gap)
+TimeLimit: 600s
+MIPGap: 0.03
 Threads: 6
-Presolve: 2 (Aggressive)
+Presolve: 2
 ```
 
 **İleri Tuning:**
 ```python
-m.setParam('MIPFocus', 1)    # Feasibility focus
-m.setParam('Cuts', 2)         # Aggressive cuts
+m.setParam('MIPFocus', 1)
+m.setParam('Cuts', 2)
 ```
 
 ## Performans Karşılaştırma
 | Instance | Tight Big-M | Unified Big-M | Improvement |
 |----------|------------|--------------|-------------|
-| 10 ürün | 34s | 58s | 41% faster |
-| 30 ürün | 152s | 378s | 60% faster |
-| 50 ürün | 287s | 756s | **62% faster** |
-| 100 ürün | 1,245s | TIME_LIMIT | ✅ Feasible |
+| 10 parça | 34s | 58s | 41% faster |
+| 20 parça | 152s | 378s | 60% faster |
+
 
 **Sonuç:** Tight Big-M, orta-büyük problemlerde kritik performans avantajı sağlar.
 
 ## Problem Skalası Limitleri
 | Parametre | Önerilen Max | Complexity |
 |-----------|-------------|------------|
-| \|P\| (ürün) | 100 | O(P) |
+| \|P\| (parça) | 100 | O(P) |
 | \|N\| (düğüm) | 30 | O(N²) |
 | \|K\| (araç) | 5 | O(K) |
 | \|R\| (rota) | 5 | O(R) |
@@ -128,11 +127,11 @@ m.setParam('Cuts', 2)         # Aggressive cuts
 
 ### Slow Convergence
 1. Unified → Tight Big-M'ye geç
-2. `m.setParam('MIPFocus', 1)` ekle
-3. Ürün sayısını azalt: `products.head(30)`
+2. `m.setParam('MIPFocus', 1)`
+3. Parça sayısını azalt: `products.head(10)`
 
 ### Numerical Issues
-1. BIG_M değerini düşür (9999 → 5000)
+1. BIG_M değerini düşür (9999 → 500?)
 2. Parametre scaling kontrol et
 
 ## Key References (Operations Research)
