@@ -123,12 +123,11 @@ Q_max = 20
 # epsilon = 0.1
 U = len(Nw)
 
-# TIGHT BIG-M (as per PDF)
-M_16 = T_max - e_min + C_max    # = 56
-M_20 = T_max - e_min             # = 45
-M_22 = T_max                      # = 480
-M_24 = Q_max                      # = 20
-M_25 = Q_max                      # = 20
+M_16 = T_max - e_min + C_max
+M_20 = T_max - e_min
+M_22 = T_max
+M_24 = Q_max
+M_25 = Q_max
 
 print("\n" + "="*80)
 print("DATA LOADED")
@@ -142,7 +141,7 @@ print("="*80 + "\n")
 # =====================================================================
 # MODEL CREATION
 # =====================================================================
-m = gp.Model("Academic_Model_Constraints_c3_to_c36")
+m = gp.Model("Internal_Logistics_Model_Constraints_c3_to_c36")
 
 # =====================================================================
 # DECISION VARIABLES
@@ -295,7 +294,7 @@ for k in K:
 
 print("(13) First departure: td_h,k,1 = 0  (k)")
 
-# (14) Successive route departure >= previous arrival + ε
+# (14) Successive route departure >= previous arrival
 for k in K:
     for r in R[1:]:
         m.addConstr(td['h', k, r] >= ta['h', k, r-1], name=f"c14[{k},{r}]")
@@ -384,7 +383,7 @@ print("(19) Departure time: td_j >= ts_j + Σ_p s_l_p·f_p  (j,k,r)")
 print("="*80 + "\n")
 
 # =====================================================================
-# CONSTRAINT (20): PICKUP-DELIVERY PRECEDENCE (TIGHT BIG-M = M_20 = 45) 🔥
+# CONSTRAINT (20): PICKUP-DELIVERY PRECEDENCE
 # =====================================================================
 print("="*80)
 print("CONSTRAINT (20): PICKUP-DELIVERY PRECEDENCE (TIGHT BIG-M)")
@@ -419,7 +418,7 @@ print("(21) Depot arrival: ta_h >= td_h  (k,r)")
 print("="*80 + "\n")
 
 # =====================================================================
-# CONSTRAINT (22): WAITING TIME DEFINITION (TIGHT BIG-M = M_22 = 480) 🔥
+# CONSTRAINT (22): WAITING TIME DEFINITION
 # =====================================================================
 print("="*80)
 print("CONSTRAINT (22): WAITING TIME DEFINITION (TIGHT BIG-M)")
@@ -457,7 +456,7 @@ print("(23) Load change: Δ_j >= Σ_p q_p·f_p(o_p=j) - Σ_p q_p·f_p(d_p=j)  (j
 print("="*80 + "\n")
 
 # =====================================================================
-# CONSTRAINTS (24)-(25): LOAD FLOW (TIGHT BIG-M = M_24, M_25 = 20) 🔥
+# CONSTRAINTS (24)-(25): LOAD FLOW
 # =====================================================================
 print("="*80)
 print("CONSTRAINTS (24)-(25): LOAD FLOW (TIGHT BIG-M)")
@@ -653,8 +652,8 @@ print("SOLVER SETUP")
 print("="*80)
 
 os.makedirs('results', exist_ok=True)
-excel_path = os.path.join('results', f"result_academic_{timestamp}.xlsx")
-log_path   = os.path.join(desktop_dir, f"result_academic_{timestamp}.txt")
+excel_path = os.path.join('results', f"result_internal_logistics_{timestamp}.xlsx")
+log_path   = os.path.join(desktop_dir, f"result_internal_logistics_{timestamp}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
@@ -700,7 +699,7 @@ elif m.status == GRB.INFEASIBLE:
     print("MODEL IS INFEASIBLE")
     print("="*80)
     m.computeIIS()
-    iis_file = f"infeasible_academic_{timestamp}.ilp"
+    iis_file = f"infeasible_internal_logistics_{timestamp}.ilp"
     m.write(iis_file)
     print(f"IIS file: {iis_file}")
 
