@@ -310,7 +310,7 @@ print("(15) Arrival monotonicity: ta_h,k,r >= ta_h,k,r-1  (k,r>1)")
 print("="*80 + "\n")
 
 # =====================================================================
-# CONSTRAINT (16): TIME CONSISTENCY (TIGHT BIG-M = M_16 = 56) 🔥
+# CONSTRAINT (16): TIME CONSISTENCY (TIGHT BIG-M = M_16 = 56)
 # =====================================================================
 print("="*80)
 print("CONSTRAINT (16): TIME CONSISTENCY (TIGHT BIG-M)")
