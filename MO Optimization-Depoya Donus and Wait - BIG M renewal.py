@@ -32,10 +32,9 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 # =====================================================================
 # PARAMETERS
 # =====================================================================
-TIME_LIMIT = 144000
-MIP_GAP    = 0.03
-THREADS    = 6
-EPS_WAIT   = 150
+TIME_LIMIT = 3600
+MIP_GAP    = 0.01
+EPS_WAIT   = 90
 
 # =====================================================================
 # HELPER FUNCTIONS
@@ -61,7 +60,7 @@ def minutes_to_hhmm(minutes):
     mins = int(minutes % 60)
     return f"{hours:02d}:{mins:02d}"
 
-# =====================================================================
+# =============================================================fvs1========
 # DATA LOADING
 # =====================================================================
 data_path   = r"C:\Users\Asus\Desktop\Er\\"
@@ -69,7 +68,7 @@ desktop_dir = r"C:\Users\Asus\Desktop"
 
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(50)
+products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
@@ -123,12 +122,11 @@ Q_max = 20
 # epsilon = 0.1
 U = len(Nw)
 
-# TIGHT BIG-M (as per PDF)
-M_16 = T_max - e_min + C_max    # = 56
-M_20 = T_max - e_min             # = 45
-M_22 = T_max                      # = 480
-M_24 = Q_max                      # = 20
-M_25 = Q_max                      # = 20
+M_16 = T_max + C_max
+M_20 = T_max
+M_22 = T_max - e_min
+M_24 = Q_max
+M_25 = Q_max
 
 print("\n" + "="*80)
 print("DATA LOADED")
@@ -142,7 +140,7 @@ print("="*80 + "\n")
 # =====================================================================
 # MODEL CREATION
 # =====================================================================
-m = gp.Model("Academic_Model_Constraints_c3_to_c36")
+m = gp.Model("Internal_Logistics_Model_Constraints_c3_to_c36")
 
 # =====================================================================
 # DECISION VARIABLES
@@ -658,14 +656,12 @@ log_path   = os.path.join(desktop_dir, f"result_academic_{timestamp}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
-m.setParam('Threads', THREADS)
 m.setParam('Presolve', 2)
 m.setParam('LogFile', log_path)
 m.update()
 
 print(f"Time Limit: {TIME_LIMIT}s")
 print(f"MIP Gap: {MIP_GAP}")
-print(f"Threads: {THREADS}")
 print(f"Log file: {log_path}")
 print("="*80 + "\n")
 
@@ -693,6 +689,324 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     print(f"  Objective Value: {m.objVal:.2f}")
     print(f"  Runtime: {m.Runtime:.2f}s")
     print(f"  MIP Gap: {m.MIPGap*100:.2f}%")
+    print("="*80 + "\n")
+
+# =====================================================================
+    # EXCEL OUTPUT GENERATION - DETAILED VARIABLE REPORTING
+    # =====================================================================
+    
+    # Excel dosya yolu ve ismini güncelle
+    excel_output_dir = r"C:\Users\Asus\results"
+    os.makedirs(excel_output_dir, exist_ok=True)
+    excel_filename = f"result_tightM_{timestamp}.xlsx"
+    excel_full_path = os.path.join(excel_output_dir, excel_filename)
+    
+    print("="*80)
+    print("GENERATING EXCEL OUTPUT - DETAILED VARIABLE REPORTING")
+    print("="*80)
+    print(f"Output file: {excel_full_path}\n")
+    
+    # Excel writer oluştur
+    with pd.ExcelWriter(excel_full_path, engine='openpyxl') as writer:
+        
+        # ============================================================
+        # SHEET 1: optimization_results (Model Özet Bilgileri)
+        # ============================================================
+        opt_results = {
+            'model': ['tight_M_optimized'],
+            'objective': ['min_total_arrival'],
+            'obj_value': [m.objVal if m.SolCount > 0 else None],
+            'best_bound': [m.ObjBound if hasattr(m, 'ObjBound') else None],
+            'mip_gap': [m.MIPGap if m.SolCount > 0 else None],
+            'runtime': [m.Runtime],
+            'status': [m.status],
+            'total_wait_minutes': [sum(w[p].X for p in P if w[p].X is not None)],
+            'total_arrival_times': [sum(ta['h', k, r].X for k in K for r in R if ta['h', k, r].X is not None)],
+            'epsilon_wait_upper': [EPS_WAIT],
+            'wait_slack_remaining': [EPS_WAIT - sum(w[p].X for p in P if w[p].X is not None)],
+            '|N|': [len(N)],
+            '|Nw|': [len(Nw)],
+            '|K|': [len(K)],
+            '|R|': [len(R)],
+            'KxR': [len(K) * len(R)],
+            'U_(|Nw|)': [U],
+            'M_16': [M_16],
+            'M_20': [M_20],
+            'M_22': [M_22],
+            'M_24': [M_24],
+            'M_25': [M_25]
+        }
+        df_opt = pd.DataFrame(opt_results)
+        df_opt.to_excel(writer, sheet_name='optimization_results', index=False)
+        
+        # ============================================================
+        # SHEET 2: x_ijkr (Yay Akış Değişkenleri)
+        # ============================================================
+        x_list = []
+        for i in N:
+            for j in N:
+                if i != j:
+                    for k in K:
+                        for r in R:
+                            if (i, j, k, r) in x and x[(i, j, k, r)].X > 0.5:
+                                x_list.append({
+                                    'var': 'x',
+                                    'i': i,
+                                    'j': j,
+                                    'k': k,
+                                    'r': r,
+                                    'val': int(x[(i, j, k, r)].X)
+                                })
+        df_x = pd.DataFrame(x_list)
+        if df_x.empty:
+            df_x = pd.DataFrame(columns=['var', 'i', 'j', 'k', 'r', 'val'])
+        df_x.to_excel(writer, sheet_name='x_ijkr', index=False)
+        
+        # ============================================================
+        # SHEET 3: f_pkr (Ürün Atama Değişkenleri)
+        # ============================================================
+        f_list = []
+        for p in P:
+            for k in K:
+                for r in R:
+                    if f[p, k, r].X > 0.5:
+                        f_list.append({
+                            'var': 'f',
+                            'p': p,
+                            'k': k,
+                            'r': r,
+                            'val': int(f[p, k, r].X)
+                        })
+        df_f = pd.DataFrame(f_list)
+        if df_f.empty:
+            df_f = pd.DataFrame(columns=['var', 'p', 'k', 'r', 'val'])
+        df_f.to_excel(writer, sheet_name='f_pkr', index=False)
+        
+        # ============================================================
+        # SHEET 4: u_jkr (MTZ Subtour Elimination)
+        # ============================================================
+        u_list = []
+        for j in Nw:
+            for k in K:
+                for r in R:
+                    if u[j, k, r].X > 0.01:  # Sadece anlamlı değerler
+                        u_list.append({
+                            'var': 'u',
+                            'j': j,
+                            'k': k,
+                            'r': r,
+                            'u': u[j, k, r].X
+                        })
+        df_u = pd.DataFrame(u_list)
+        if df_u.empty:
+            df_u = pd.DataFrame(columns=['var', 'j', 'k', 'r', 'u'])
+        df_u.to_excel(writer, sheet_name='u_jkr', index=False)
+        
+        # ============================================================
+        # SHEET 5: z_kr (Rota Aktivasyon - Türetilmiş)
+        # ============================================================
+        z_list = []
+        for k in K:
+            for r in R:
+                # Rotanın aktif olup olmadığını kontrol et
+                z_val = 1 if any(x[('h', j, k, r)].X > 0.5 for j in Nw if ('h', j, k, r) in x) else 0
+                z_list.append({
+                    'var': 'z',
+                    'k': k,
+                    'r': r,
+                    'z': z_val
+                })
+        df_z = pd.DataFrame(z_list)
+        df_z.to_excel(writer, sheet_name='z_kr', index=False)
+        
+        # ============================================================
+        # SHEET 6: w_p (Bekleme Süreleri)
+        # ============================================================
+        w_list = []
+        for p in P:
+            if w[p].X is not None:
+                w_list.append({
+                    'var': 'w',
+                    'p': p,
+                    'w_val': w[p].X
+                })
+        df_w = pd.DataFrame(w_list)
+        if df_w.empty:
+            df_w = pd.DataFrame(columns=['var', 'p', 'w_val'])
+        df_w.to_excel(writer, sheet_name='w_p', index=False)
+        
+        # ============================================================
+        # SHEET 7: ta (Varış Zamanları)
+        # ============================================================
+        ta_list = []
+        for j in N:
+            for k in K:
+                for r in R:
+                    if ta[j, k, r].X is not None:
+                        ta_list.append({
+                            'var': 'ta',
+                            'node': j,
+                            'k': k,
+                            'r': r,
+                            'time': ta[j, k, r].X,
+                            'stamp': minutes_to_hhmm(ta[j, k, r].X)
+                        })
+        df_ta = pd.DataFrame(ta_list)
+        if df_ta.empty:
+            df_ta = pd.DataFrame(columns=['var', 'node', 'k', 'r', 'time', 'stamp'])
+        df_ta.to_excel(writer, sheet_name='ta', index=False)
+        
+        # ============================================================
+        # SHEET 8: td (Kalkış Zamanları)
+        # ============================================================
+        td_list = []
+        for j in N:
+            for k in K:
+                for r in R:
+                    if td[j, k, r].X is not None:
+                        td_list.append({
+                            'var': 'td',
+                            'node': j,
+                            'k': k,
+                            'r': r,
+                            'time': td[j, k, r].X,
+                            'stamp': minutes_to_hhmm(td[j, k, r].X)
+                        })
+        df_td = pd.DataFrame(td_list)
+        if df_td.empty:
+            df_td = pd.DataFrame(columns=['var', 'node', 'k', 'r', 'time', 'stamp'])
+        df_td.to_excel(writer, sheet_name='td', index=False)
+        
+        # ============================================================
+        # SHEET 9: ts (Servis Başlangıç Zamanları)
+        # ============================================================
+        ts_list = []
+        for j in Nw:
+            for k in K:
+                for r in R:
+                    if ts[j, k, r].X is not None:
+                        ts_list.append({
+                            'var': 'ts',
+                            'node': j,
+                            'k': k,
+                            'r': r,
+                            'time': ts[j, k, r].X,
+                            'stamp': minutes_to_hhmm(ts[j, k, r].X)
+                        })
+        df_ts = pd.DataFrame(ts_list)
+        if df_ts.empty:
+            df_ts = pd.DataFrame(columns=['var', 'node', 'k', 'r', 'time', 'stamp'])
+        df_ts.to_excel(writer, sheet_name='ts', index=False)
+        
+        # ============================================================
+        # SHEET 10: y_jkr (Yük Değişkenleri)
+        # ============================================================
+        y_list = []
+        for j in N:
+            for k in K:
+                for r in R:
+                    if y[j, k, r].X is not None and abs(y[j, k, r].X) > 1e-6:
+                        y_list.append({
+                            'var': 'y',
+                            'node': j,
+                            'k': k,
+                            'r': r,
+                            'y_val': y[j, k, r].X
+                        })
+        df_y = pd.DataFrame(y_list)
+        if df_y.empty:
+            df_y = pd.DataFrame(columns=['var', 'node', 'k', 'r', 'y_val'])
+        df_y.to_excel(writer, sheet_name='y_jkr', index=False)
+        
+        # ============================================================
+        # SHEET 11: delta_jkr (Yük Değişimi)
+        # ============================================================
+        delta_list = []
+        for j in Nw:
+            for k in K:
+                for r in R:
+                    if delta[j, k, r].X is not None and abs(delta[j, k, r].X) > 1e-6:
+                        delta_list.append({
+                            'var': 'delta',
+                            'node': j,
+                            'k': k,
+                            'r': r,
+                            'delta_val': delta[j, k, r].X
+                        })
+        df_delta = pd.DataFrame(delta_list)
+        if df_delta.empty:
+            df_delta = pd.DataFrame(columns=['var', 'node', 'k', 'r', 'delta_val'])
+        df_delta.to_excel(writer, sheet_name='delta_jkr', index=False)
+        
+        # ============================================================
+        # SHEET 12: itinerary (Rota Özeti)
+        # ============================================================
+        itinerary_list = []
+        for k in K:
+            for r in R:
+                # Rotanın kullanılıp kullanılmadığını kontrol et
+                route_active = any(x[(i, j, k, r)].X > 0.5 
+                                  for i in N for j in N 
+                                  if (i, j, k, r) in x)
+                
+                if route_active:
+                    # Rota sırasını bul
+                    current = 'h'
+                    visited = set(['h'])
+                    visit_order = []
+                    
+                    while True:
+                        next_node = None
+                        for j in N:
+                            if j != current and (current, j, k, r) in x and x[(current, j, k, r)].X > 0.5:
+                                next_node = j
+                                break
+                        
+                        if next_node is None or next_node in visited:
+                            break
+                        
+                        if next_node == 'h':
+                            break
+                        
+                        visit_order.append(next_node)
+                        visited.add(next_node)
+                        current = next_node
+                        
+                        if len(visit_order) > len(N):
+                            break
+                    
+                    # Her ziyaret edilen düğüm için satır ekle
+                    for idx, j in enumerate(visit_order, 1):
+                        itinerary_list.append({
+                            'k': k,
+                            'r': r,
+                            'j': j,
+                            'u': u[j, k, r].X if j in Nw else None,
+                            'ta_stamp': minutes_to_hhmm(ta[j, k, r].X),
+                            'td_stamp': minutes_to_hhmm(td[j, k, r].X),
+                            'y_after': y[j, k, r].X if j in Nw else None
+                        })
+        
+        df_itinerary = pd.DataFrame(itinerary_list)
+        if df_itinerary.empty:
+            df_itinerary = pd.DataFrame(columns=['k', 'r', 'j', 'u', 'ta_stamp', 'td_stamp', 'y_after'])
+        df_itinerary.to_excel(writer, sheet_name='itinerary', index=False)
+    
+    print(f"✓ Excel output successfully generated with 12 sheets")
+    print(f"  File: {excel_full_path}")
+    print(f"\n  Sheet Summary:")
+    print(f"    1. optimization_results - Model özet ve Big-M değerleri")
+    print(f"    2. x_ijkr - Yay akış değişkenleri ({len(df_x)} aktif yay)")
+    print(f"    3. f_pkr - Ürün atamaları ({len(df_f)} atama)")
+    print(f"    4. u_jkr - MTZ pozisyon değişkenleri ({len(df_u)} kayıt)")
+    print(f"    5. z_kr - Rota aktivasyonları ({len(df_z)} rota)")
+    print(f"    6. w_p - Bekleme süreleri ({len(df_w)} ürün)")
+    print(f"    7. ta - Varış zamanları ({len(df_ta)} kayıt)")
+    print(f"    8. td - Kalkış zamanları ({len(df_td)} kayıt)")
+    print(f"    9. ts - Servis başlangıçları ({len(df_ts)} kayıt)")
+    print(f"   10. y_jkr - Yük değerleri ({len(df_y)} kayıt)")
+    print(f"   11. delta_jkr - Yük değişimleri ({len(df_delta)} kayıt)")
+    print(f"   12. itinerary - Rota özeti ({len(df_itinerary)} ziyaret)")
     print("="*80 + "\n")
 
 elif m.status == GRB.INFEASIBLE:
