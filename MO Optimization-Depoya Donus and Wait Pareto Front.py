@@ -1,43 +1,50 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import glob
 
 # =====================================================================
 # AYARLAR
 # =====================================================================
-folder = r"C:\Users\Asus\results\Pareto"  # Excel dosyaları burda
-output_file = os.path.join(folder, "pareto_frontier.png")  # Grafik buraya
+folder = r"C:\Users\Asus\results\Pareto"
+output_file = os.path.join(folder, "pareto_frontier.png")
+consolidated_excel = os.path.join(folder, "birlestirilmis_sonuclar.xlsx")  # YENİ
 
 # =====================================================================
-# TÜM EXCEL DOSYALARINI OKU
+# EXCEL DOSYALARINI OKU
 # =====================================================================
 print("="*80)
 print("EXCEL DOSYALARI OKUNUYOR")
 print("="*80)
 
-# Tüm .xlsx dosyalarını bul
 excel_files = glob.glob(os.path.join(folder, "*.xlsx"))
+# Birleştirilmiş dosyayı listeden çıkar (varsa tekrar okumasın)
+excel_files = [f for f in excel_files if not f.endswith("birlestirilmis_sonuclar.xlsx")]
+
 print(f"Bulunan dosya sayısı: {len(excel_files)}\n")
 
 data = []
+all_optimization_results = []  # YENİ: Tüm optimization_results sekmelerini sakla
 
 for file in excel_files:
     try:
         filename = os.path.basename(file)
         print(f"Okunuyor: {filename}")
         
-        # optimization_results sekmesini oku
         df = pd.read_excel(file, sheet_name='optimization_results')
         
-        # Verileri çek
+        # YENİ: Kaynak dosya bilgisini ekle
+        df_copy = df.copy()
+        df_copy['kaynak_dosya'] = filename
+        all_optimization_results.append(df_copy)
+        
         epsilon = df['epsilon_wait_upper'].values[0]
-        arrival = df['total_arrival_times'].values[0]   # X ekseni (1. amaç - depoya dönüş)
-        waiting = df['total_wait_minutes'].values[0]    # Y ekseni (2. amaç - bekleme)
+        arrival = df['total_arrival_times'].values[0]
+        waiting = df['total_wait_minutes'].values[0]
         status = df['status'].values[0]
         mip_gap = df['mip_gap'].values[0] * 100
         
-        # Status yorumla
         if status == 2:
             status_text = "OPTIMAL"
         elif status == 9:
@@ -49,8 +56,8 @@ for file in excel_files:
         
         data.append({
             'epsilon': epsilon,
-            'arrival': arrival,      # X ekseni (total_arrival_times)
-            'waiting': waiting,      # Y ekseni (total_wait_minutes)
+            'arrival': arrival,
+            'waiting': waiting,
             'status': status_text,
             'mip_gap': mip_gap
         })
@@ -63,14 +70,36 @@ for file in excel_files:
 print(f"\n✓ Toplam {len(data)} dosya okundu\n")
 
 # =====================================================================
+# YENİ: BİRLEŞTİRİLMİŞ EXCEL OLUŞTUR
+# =====================================================================
+print("="*80)
+print("BİRLEŞTİRİLMİŞ EXCEL OLUŞTURULUYOR")
+print("="*80)
+
+if all_optimization_results:
+    # Tüm dataframe'leri alt alta birleştir
+    df_birlesik = pd.concat(all_optimization_results, ignore_index=True)
+    
+    # Epsilon değerine göre büyükten küçüğe sırala
+    df_birlesik = df_birlesik.sort_values('epsilon_wait_upper', ascending=False).reset_index(drop=True)
+    
+    # Excel'e kaydet
+    df_birlesik.to_excel(consolidated_excel, index=False, sheet_name='optimization_results')
+    
+    print(f"✓ Birleştirilmiş Excel kaydedildi: {consolidated_excel}")
+    print(f"  - Toplam satır: {len(df_birlesik)}")
+    print(f"  - Kolon sayısı: {len(df_birlesik.columns)}")
+    print(f"  - Epsilon aralığı: {df_birlesik['epsilon_wait_upper'].min():.1f} - {df_birlesik['epsilon_wait_upper'].max():.1f}")
+    print()
+else:
+    print("✗ Birleştirme için veri bulunamadı\n")
+
+# =====================================================================
 # DATAFRAME OLUŞTUR
 # =====================================================================
 df = pd.DataFrame(data)
-
-# Epsilon'a göre sırala
 df = df.sort_values('epsilon', ascending=False).reset_index(drop=True)
 
-# Feasible/Infeasible ayır
 df_feasible = df[df['status'].isin(['OPTIMAL', 'SUBOPTIMAL'])].copy()
 df_infeasible = df[df['status'] == 'INFEASIBLE'].copy()
 
@@ -81,97 +110,175 @@ print(f"Feasible: {len(df_feasible)}")
 print(f"Infeasible: {len(df_infeasible)}")
 print()
 
-# Feasible verileri göster
 if not df_feasible.empty:
     print("FEASIBLE ÇÖZÜMLER:")
     print(df_feasible[['epsilon', 'arrival', 'waiting', 'mip_gap', 'status']].to_string())
     print()
 
 # =====================================================================
-# PARETO FRONTIER ÇİZ
+# AKADEMİK STIL PARETO FRONTIER GRAFİĞİ
 # =====================================================================
 print("="*80)
-print("PARETO FRONTIER ÇİZİLİYOR")
+print("AKADEMİK PARETO FRONTIER ÇİZİLİYOR")
 print("="*80)
 
-fig, ax = plt.subplots(figsize=(14, 10))
+# Grafik ayarları - Akademik stil
+plt.style.use('seaborn-v0_8-paper')
+fig, ax = plt.subplots(figsize=(10, 8))
 
-# Feasible noktalar
 if not df_feasible.empty:
-    # Kaliteye göre renk
-    excellent = df_feasible[df_feasible['mip_gap'] < 1.0]
-    good = df_feasible[(df_feasible['mip_gap'] >= 1.0) & (df_feasible['mip_gap'] < 5.0)]
-    poor = df_feasible[df_feasible['mip_gap'] >= 5.0]
     
-    if not excellent.empty:
-        ax.scatter(excellent['arrival'], excellent['waiting'],
-                  s=250, c='#2E86DE', marker='o', alpha=0.7,
-                  edgecolors='black', linewidth=2,
-                  label='Excellent (gap<1%)', zorder=3)
-    
-    if not good.empty:
-        ax.scatter(good['arrival'], good['waiting'],
-                  s=250, c='#FFA502', marker='o', alpha=0.7,
-                  edgecolors='black', linewidth=2,
-                  label='Good (1%≤gap<5%)', zorder=3)
-    
-    if not poor.empty:
-        ax.scatter(poor['arrival'], poor['waiting'],
-                  s=250, c='#EE5A6F', marker='o', alpha=0.7,
-                  edgecolors='black', linewidth=2,
-                  label='Poor (gap≥5%)', zorder=3)
-    
-    # Pareto frontier çizgisi (sadece kaliteli çözümler)
+    # Kaliteli çözümleri ayır
     df_quality = df_feasible[df_feasible['mip_gap'] < 5.0].copy()
+    df_poor = df_feasible[df_feasible['mip_gap'] >= 5.0].copy()
+    
+    # ============================================================
+    # 1. DOMINATED BÖLGE (Gri arka plan)
+    # ============================================================
+    if len(df_quality) > 0:
+        # Pareto noktalarının üst-sağ bölgesi dominated
+        max_arrival = df_quality['arrival'].max()
+        max_waiting = df_quality['waiting'].max()
+        
+        # Dominated bölgeyi göster
+        x_extend = (max_arrival - df_quality['arrival'].min()) * 0.3
+        y_extend = (max_waiting - df_quality['waiting'].min()) * 0.3
+        
+        ax.fill_between([max_arrival, max_arrival + x_extend], 
+                       [max_waiting, max_waiting],
+                       [max_waiting + y_extend, max_waiting + y_extend],
+                       alpha=0.1, color='gray', zorder=0,
+                       label='Dominated Region')
+    
+    # ============================================================
+    # 2. PARETO FRONTIER ÇİZGİSİ (Kalın, vurgulu)
+    # ============================================================
     if len(df_quality) > 1:
         df_sorted = df_quality.sort_values('arrival')
+        
+        # Kalın kırmızı çizgi
         ax.plot(df_sorted['arrival'], df_sorted['waiting'],
-               'r--', alpha=0.6, linewidth=2.5,
-               label='Pareto Frontier', zorder=2)
+               'r-', linewidth=3.5, alpha=0.8,
+               label='Pareto Frontier', zorder=4)
+        
+        # Gölge efekti
+        ax.plot(df_sorted['arrival'], df_sorted['waiting'],
+               'r-', linewidth=6, alpha=0.2, zorder=3)
     
-    # Epsilon etiketleri
-    for _, row in df_feasible.iterrows():
+    # ============================================================
+    # 3. PARETO OPTIMAL NOKTALAR
+    # ============================================================
+    # Kaliteli çözümler (büyük noktalar)
+    if not df_quality.empty:
+        ax.scatter(df_quality['arrival'], df_quality['waiting'],
+                  s=200, c='#1e3a8a', marker='o', 
+                  edgecolors='black', linewidth=2, alpha=0.8,
+                  label='Pareto Optimal Solutions', zorder=5)
+    
+    # Düşük kaliteli çözümler (küçük, yarı saydam)
+    if not df_poor.empty:
+        ax.scatter(df_poor['arrival'], df_poor['waiting'],
+                  s=150, c='#dc2626', marker='s', 
+                  edgecolors='black', linewidth=1.5, alpha=0.5,
+                  label='Suboptimal Solutions', zorder=5)
+    
+    # ============================================================
+    # 4. EPSILON ETİKETLERİ (Profesyonel)
+    # ============================================================
+    for idx, row in df_feasible.iterrows():
+        # Etiket pozisyonu - offset ayarla
+        if row['mip_gap'] < 5.0:
+            xytext = (15, -15)
+            bbox_color = 'white'
+            fontsize = 9
+        else:
+            xytext = (15, 15)
+            bbox_color = 'lightyellow'
+            fontsize = 8
+        
         ax.annotate(f"ε={row['epsilon']:.0f}",
                    (row['arrival'], row['waiting']),
                    textcoords="offset points",
-                   xytext=(50, 5),
-                   ha='left', fontsize=10, alpha=0.8,
-                   bbox=dict(boxstyle='round,pad=0.4', 
-                           facecolor='yellow', alpha=0.4))
+                   xytext=xytext,
+                   ha='left', fontsize=fontsize,
+                   bbox=dict(boxstyle='round,pad=0.3', 
+                           facecolor=bbox_color, 
+                           edgecolor='gray',
+                           alpha=0.7),
+                   arrowprops=dict(arrowstyle='->', 
+                                 connectionstyle='arc3,rad=0.2',
+                                 color='gray', lw=1, alpha=0.5))
+    
+    # ============================================================
+    # 5. MİNİMİZASYON YÖNÜ OKLARI
+    # ============================================================
+    # Sol-alt köşeye oklar ekle
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    
+    arrow_x = x_min + (x_max - x_min) * 0.05
+    arrow_y = y_max - (y_max - y_min) * 0.05
+    arrow_length = (x_max - x_min) * 0.08
+    
+    # X ekseni oku (sol)
+    ax.arrow(arrow_x + arrow_length, arrow_y, -arrow_length, 0,
+            head_width=(y_max-y_min)*0.02, head_length=(x_max-x_min)*0.015,
+            fc='green', ec='green', linewidth=2, alpha=0.7, zorder=2)
+    ax.text(arrow_x, arrow_y, 'Better', fontsize=10, 
+           color='green', fontweight='bold', va='center')
+    
+    # Y ekseni oku (aşağı)
+    ax.arrow(arrow_x, arrow_y - arrow_length, 0, arrow_length,
+            head_width=(x_max-x_min)*0.02, head_length=(y_max-y_min)*0.015,
+            fc='green', ec='green', linewidth=2, alpha=0.7, zorder=2)
+    ax.text(arrow_x, arrow_y - arrow_length*2, 'Better', fontsize=10,
+           color='green', fontweight='bold', ha='center', rotation=90)
 
-# Infeasible gösterimi (varsa)
-if not df_infeasible.empty:
-    # Infeasible için arrival/waiting değerleri olmayabilir
-    # Bu durumda sadece bilgi olarak gösterelim
-    print(f"NOT: {len(df_infeasible)} infeasible çözüm var (grafikte gösterilemiyor)")
+# ============================================================
+# 6. GRAFIK ÖZELLİKLERİ (Akademik Stil)
+# ============================================================
+ax.set_xlabel('$f_1$: Total Arrival Time (minutes)', 
+             fontsize=13, fontweight='bold', family='serif')
+ax.set_ylabel('$f_2$: Total Waiting Time (minutes)', 
+             fontsize=13, fontweight='bold', family='serif')
+ax.set_title('Pareto Frontier for Multi-Objective Optimization\n' +
+            'Minimizing Arrival Time vs Waiting Time',
+             fontsize=14, fontweight='bold', family='serif', pad=20)
 
-# Grafik özellikleri
-ax.set_xlabel('1st Objective: Total Arrival Time (minutes)', 
-             fontsize=14, fontweight='bold')
-ax.set_ylabel('2nd Objective: Total Waiting Time (minutes)', 
-             fontsize=14, fontweight='bold')
-ax.set_title('Pareto Frontier: Epsilon-Constraint Method\n' +
-            'Arrival Time (1st Obj) vs Waiting Time (2nd Obj)',
-             fontsize=16, fontweight='bold', pad=20)
+# Grid - akademik stil
+ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, color='gray')
+ax.set_axisbelow(True)
 
-ax.grid(True, alpha=0.3, linestyle='--')
-ax.legend(fontsize=11, loc='best', framealpha=0.9)
+# Legend - sağ üst köşe, dışarıda
+ax.legend(fontsize=9, loc='upper left', bbox_to_anchor=(1.02, 1), 
+         framealpha=0.95, edgecolor='black', fancybox=False)
 
-# Margin ekle
+# Tick'ler
+ax.tick_params(axis='both', which='major', labelsize=10)
+
+# Kenarlıklar
+for spine in ax.spines.values():
+    spine.set_linewidth(1.5)
+    spine.set_color('black')
+
+# Margin
 if not df_feasible.empty:
     x_range = df_feasible['arrival'].max() - df_feasible['arrival'].min()
     y_range = df_feasible['waiting'].max() - df_feasible['waiting'].min()
     
-    ax.set_xlim(df_feasible['arrival'].min() - x_range*0.1,
-                df_feasible['arrival'].max() + x_range*0.1)
-    ax.set_ylim(df_feasible['waiting'].min() - y_range*0.1,
-                df_feasible['waiting'].max() + y_range*0.1)
+    ax.set_xlim(df_feasible['arrival'].min() - x_range*0.15,
+                df_feasible['arrival'].max() + x_range*0.15)
+    ax.set_ylim(df_feasible['waiting'].min() - y_range*0.15,
+                df_feasible['waiting'].max() + y_range*0.15)
+
+# Aspect ratio - square görünüm
+ax.set_aspect('auto')
 
 plt.tight_layout()
 
-# Kaydet
-plt.savefig(output_file, dpi=300, bbox_inches='tight')
-print(f"\n✓ Grafik kaydedildi: {output_file}")
+# Kaydet - yüksek çözünürlük
+plt.savefig(output_file, dpi=400, bbox_inches='tight', facecolor='white')
+print(f"\n✓ Akademik stil grafik kaydedildi: {output_file}")
 print("="*80)
 
 plt.show()
