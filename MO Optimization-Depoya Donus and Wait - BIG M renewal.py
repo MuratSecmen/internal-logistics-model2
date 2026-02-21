@@ -34,7 +34,7 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 # =====================================================================
 TIME_LIMIT = 3600
 MIP_GAP    = 0.01
-EPS_WAIT   = 90
+EPS_WAIT   = 71
 
 # =====================================================================
 # HELPER FUNCTIONS
@@ -721,7 +721,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
             'runtime': [m.Runtime],
             'status': [m.status],
             'total_wait_minutes': [sum(w[p].X for p in P if w[p].X is not None)],
-            'total_arrival_times': [sum(ta['h', k, r].X for k in K for r in R if ta['h', k, r].X is not None)],
+            'total_arrival_times': [sum(ta['h', k, MAX_ROUTES].X for k in K if ta['h', k, MAX_ROUTES].X is not None)],
             'epsilon_wait_upper': [EPS_WAIT],
             'wait_slack_remaining': [EPS_WAIT - sum(w[p].X for p in P if w[p].X is not None)],
             '|N|': [len(N)],
