@@ -30,19 +30,21 @@ sys.stdout = TeeOutput(original_stdout, terminal_log_file)
 print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 
 # =====================================================================
-# PARAMETERS
+# PARAMETERS 
 # =====================================================================
-TIME_LIMIT = 3600
+TIME_LIMIT = 21600
 MIP_GAP    = 0.01
-EPS_WAIT   = 71
+EPS_WAIT   = 9999
+
 
 # =====================================================================
 # HELPER FUNCTIONS
-# =====================================================================
+# ===================================================================== 
 def ready_to_min(v):
     if pd.isna(v): return 0
     if isinstance(v, (pd.Timestamp, datetime)): return int(v.hour)*60 + int(v.minute)
     if isinstance(v, time): return int(v.hour)*60 + int(v.minute)
+    
     if isinstance(v, (int, float)) and not isinstance(v, bool): return int(v)
     s = str(v).strip()
     dt = pd.to_datetime(s, errors='coerce')
@@ -60,7 +62,7 @@ def minutes_to_hhmm(minutes):
     mins = int(minutes % 60)
     return f"{hours:02d}:{mins:02d}"
 
-# =============================================================fvs1========
+# =====================================================================
 # DATA LOADING
 # =====================================================================
 data_path   = r"C:\Users\Asus\Desktop\Er\\"
@@ -68,7 +70,7 @@ desktop_dir = r"C:\Users\Asus\Desktop"
 
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
+products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(20)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
@@ -159,7 +161,7 @@ delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta"
 # =====================================================================
 # OBJECTIVE FUNCTIONS (1)-(2)
 # =====================================================================
-obj1 = quicksum(ta['h', k, MAX_ROUTES] for k in K)
+obj1 = quicksum(ta['h', k, MAX_ROUTES] for k in K) - len(K)*420
 obj2 = quicksum(w[p] for p in P)
 m.setObjective(obj1 + 0.001*obj2, GRB.MINIMIZE)
 
@@ -681,7 +683,7 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
         print(f"Best solution found: {m.objVal if m.SolCount > 0 else 'NONE'}")
     
     total_wait = sum(w[p].X for p in P if w[p].X is not None)
-    total_arrival = sum(ta['h', k, r].X for k in K for r in R if ta['h', k, r].X is not None)
+    total_arrival = sum(ta['h', k, MAX_ROUTES].X for k in K if ta['h', k, MAX_ROUTES].X is not None)
     
     print(f"\nResults:")
     print(f"  Primary Objective (Σ ta_hkr): {total_arrival:.2f} min")
