@@ -74,7 +74,7 @@ data_path   = "inputs"
 
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(20)
+products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
