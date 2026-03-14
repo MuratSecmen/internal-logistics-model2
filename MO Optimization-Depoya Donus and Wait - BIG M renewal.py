@@ -22,7 +22,9 @@ class TeeOutput:
             f.flush()
 
 timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
-terminal_log_path = os.path.join(r"C:\Users\Asus\Desktop", f"terminal_output_{timestamp}.txt")
+# DÜZELTME: Log dosya yolu 'results' klasörü yapıldı
+os.makedirs('results', exist_ok=True)
+terminal_log_path = os.path.join('results', f"terminal_output_{timestamp}.txt")
 terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
 original_stdout = sys.stdout
 sys.stdout = TeeOutput(original_stdout, terminal_log_file)
@@ -35,6 +37,8 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 TIME_LIMIT = 21600
 MIP_GAP    = 0.01
 EPS_WAIT   = 9999
+# EKLENEN PARAMETRE: Vardiya başlangıcı (420 dakika = 07:00)
+SHIFT_START = 420 
 
 
 # =====================================================================
@@ -65,8 +69,8 @@ def minutes_to_hhmm(minutes):
 # =====================================================================
 # DATA LOADING
 # =====================================================================
-data_path   = r"C:\Users\Asus\Desktop\Er\\"
-desktop_dir = r"C:\Users\Asus\Desktop"
+# DÜZELTME: Veri yolu 'inputs' klasörü yapıldı
+data_path   = "inputs"
 
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
@@ -161,14 +165,15 @@ delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta"
 # =====================================================================
 # OBJECTIVE FUNCTIONS (1)-(2)
 # =====================================================================
-obj1 = quicksum(ta['h', k, MAX_ROUTES] for k in K) - len(K)*420
+# DÜZELTME: 420 yerine SHIFT_START kullanıldı
+obj1 = quicksum(ta['h', k, MAX_ROUTES] for k in K) - len(K)*SHIFT_START
 obj2 = quicksum(w[p] for p in P)
 m.setObjective(obj1 + 0.001*obj2, GRB.MINIMIZE)
 
 print("="*80)
 print("OBJECTIVE FUNCTIONS")
 print("="*80)
-print("(1) Primary: min Σ_k ta_h,k,|R|  (total arrival times)")
+print(f"(1) Primary: min Σ_k ta_h,k,|R| - |K|*{SHIFT_START}  (total arrival times)")
 print("(2) Secondary: min Σ_p w_p  (total waiting time)")
 print("    Weighted: 0.001 × secondary")
 print("="*80 + "\n")
@@ -291,9 +296,10 @@ print("="*80)
 
 # (13) First departure
 for k in K:
-    m.addConstr(td['h', k, 1] == 420, name=f"c13[{k}]")
+    # DÜZELTME: 420 yerine SHIFT_START kullanıldı
+    m.addConstr(td['h', k, 1] == SHIFT_START, name=f"c13[{k}]")
 
-print("(13) First departure: td_h,k,1 = 0  (k)")
+print(f"(13) First departure: td_h,k,1 = {SHIFT_START}  (k)")
 
 # (14) Successive route departure >= previous arrival + ε
 for k in K:
@@ -652,9 +658,10 @@ print("="*80)
 print("SOLVER SETUP")
 print("="*80)
 
+# DÜZELTME: Gurobi logu doğrudan 'results' klasörüne eklendi
 os.makedirs('results', exist_ok=True)
 excel_path = os.path.join('results', f"result_academic_{timestamp}.xlsx")
-log_path   = os.path.join(desktop_dir, f"result_academic_{timestamp}.txt")
+log_path   = os.path.join('results', f"result_academic_{timestamp}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
@@ -697,8 +704,8 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL):
     # EXCEL OUTPUT GENERATION - DETAILED VARIABLE REPORTING
     # =====================================================================
     
-    # Excel dosya yolu ve ismini güncelle
-    excel_output_dir = r"C:\Users\Asus\results"
+    # DÜZELTME: Excel dosyası da 'results' klasörüne gidecek
+    excel_output_dir = "results"
     os.makedirs(excel_output_dir, exist_ok=True)
     excel_filename = f"result_tightM_{timestamp}.xlsx"
     excel_full_path = os.path.join(excel_output_dir, excel_filename)
@@ -1016,7 +1023,7 @@ elif m.status == GRB.INFEASIBLE:
     print("MODEL IS INFEASIBLE")
     print("="*80)
     m.computeIIS()
-    iis_file = f"infeasible_academic_{timestamp}.ilp"
+    iis_file = os.path.join('results', f"infeasible_academic_{timestamp}.ilp")
     m.write(iis_file)
     print(f"IIS file: {iis_file}")
 
