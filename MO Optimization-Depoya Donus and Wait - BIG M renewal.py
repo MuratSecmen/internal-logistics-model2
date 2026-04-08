@@ -70,8 +70,8 @@ def minutes_to_hhmm(minutes):
 # DATA LOADING
 # =====================================================================
 # DÜZELTME: Veri yolu 'inputs' klasörü yapıldı
-data_path   = "inputs"
-
+data_path   = r"C:\Users\Asus\Desktop\Er\\"
+desktop_dir = r"C:\Users\Asus\Desktop"
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
 products = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(10)
