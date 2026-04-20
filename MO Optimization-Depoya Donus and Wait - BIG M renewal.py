@@ -301,12 +301,11 @@ for k in K:
 
 print(f"(13) First departure: td_h,k,1 = {SHIFT_START}  (k)")
 
-# (14) Successive route departure >= previous arrival + ε
+# (14) Successive route departure >= previous arrival
 for k in K:
     for r in R[1:]:
         m.addConstr(td['h', k, r] >= ta['h', k, r-1], name=f"c14[{k},{r}]")
-
-print("(14) Route sequence (departure): td_h,k,r >= ta_h,k,r-1 + ε  (k,r>1)")
+print("(14) Route sequence (departure): td_h,k,r >= ta_h,k,r-1 (k,r>1)")
 
 # (15) Arrival time monotonicity
 for k in K:
