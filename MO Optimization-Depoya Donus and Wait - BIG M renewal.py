@@ -292,9 +292,7 @@ print("="*80)
 
 # (13) First departure
 for k in K:
-    # DÜZELTME: 420 yerine SHIFT_START kullanıldı
     m.addConstr(td['h', k, 1] == SHIFT_START, name=f"c13[{k}]")
-
 print(f"(13) First departure: td_h,k,1 = {SHIFT_START}  (k)")
 
 # (14) Successive route departure >= previous arrival
