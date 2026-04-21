@@ -37,7 +37,6 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 TIME_LIMIT = 21600
 MIP_GAP    = 0.01
 EPS_WAIT   = 9999
-# EKLENEN PARAMETRE: Vardiya başlangıcı (420 dakika = 07:00)
 SHIFT_START = 420 
 
 
@@ -69,7 +68,6 @@ def minutes_to_hhmm(minutes):
 # =====================================================================
 # DATA LOADING
 # =====================================================================
-# DÜZELTME: Veri yolu 'inputs' klasörü yapıldı
 data_path   = r"C:\Users\Asus\Desktop\Er\\"
 desktop_dir = r"C:\Users\Asus\Desktop"
 nodes    = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
@@ -165,7 +163,6 @@ delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta"
 # =====================================================================
 # OBJECTIVE FUNCTIONS (1)-(2)
 # =====================================================================
-# DÜZELTME: 420 yerine SHIFT_START kullanıldı
 obj1 = quicksum(ta['h', k, MAX_ROUTES] for k in K) - len(K)*SHIFT_START
 obj2 = quicksum(w[p] for p in P)
 m.setObjective(obj1 + 0.001*obj2, GRB.MINIMIZE)
