@@ -22,7 +22,6 @@ class TeeOutput:
             f.flush()
 
 timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
-# DÜZELTME: Log dosya yolu 'results' klasörü yapıldı
 os.makedirs('results', exist_ok=True)
 terminal_log_path = os.path.join('results', f"terminal_output_{timestamp}.txt")
 terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
