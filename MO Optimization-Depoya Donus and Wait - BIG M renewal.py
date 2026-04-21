@@ -424,7 +424,7 @@ print("(21) Depot arrival: ta_h >= td_h  (k,r)")
 print("="*80 + "\n")
 
 # =====================================================================
-# CONSTRAINT (22): WAITING TIME DEFINITION (TIGHT BIG-M = M_22 = 480) 🔥
+# CONSTRAINT (22): WAITING TIME DEFINITION (TIGHT BIG-M = M_22 = 480) 
 # =====================================================================
 print("="*80)
 print("CONSTRAINT (22): WAITING TIME DEFINITION (TIGHT BIG-M)")
