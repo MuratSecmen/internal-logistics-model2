@@ -1,0 +1,665 @@
+import os
+import copy
+from datetime import datetime
+import pandas as pd
+
+# =========================================================
+# CONFIG
+# =========================================================
+INPUT_DIR = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\inputs"
+
+FILES = [
+    "products_4part.xlsx",
+    "products_5part.xlsx",
+    "products_6part.xlsx",
+]
+
+SHIFT_START = 420
+T_MAX = 480
+
+LAMBDA_C2 = 1.0
+ALPHA1 = 1.0
+ALPHA2 = 0.5
+
+OUTPUT_FILE = os.path.join(
+    INPUT_DIR,
+    f"single_vehicle_single_route_unique_nodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+)
+
+# =========================================================
+# HELPERS
+# =========================================================
+def safe_str(v):
+    if pd.isna(v):
+        return ""
+    s = str(v).strip()
+    if s.endswith(".0"):
+        s = s[:-2]
+    return s
+
+def ready_to_min(v):
+    if pd.isna(v):
+        return 0
+    if isinstance(v, (int, float)):
+        return int(v)
+    if isinstance(v, pd.Timestamp):
+        return int(v.hour) * 60 + int(v.minute)
+    s = str(v).strip()
+    if ":" in s:
+        hh, mm = s.split(":")
+        return int(hh) * 60 + int(mm)
+    try:
+        return int(float(s))
+    except:
+        return 0
+
+def normalize_columns(df):
+    df = df.copy()
+    df.columns = [
+        str(c).strip().lower().replace("\n", " ").replace("-", "_").replace("  ", " ")
+        for c in df.columns
+    ]
+    return df
+
+def find_first_matching_column(df, candidates):
+    cols = set(df.columns)
+    for cand in candidates:
+        if cand in cols:
+            return cand
+    return None
+
+def find_header_row_and_prepare_df(file_path, sheet_name, max_scan_rows=8):
+    raw = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
+    best_df = None
+    best_score = -1
+
+    product_candidates = {"product_id", "product id", "parça", "parca", "id", "ürün", "urun"}
+    origin_candidates = {"origin", "from", "kaynak", "source", "çıkış", "cikis"}
+    dest_candidates = {"destination", "to", "hedef", "dest", "varış", "varis"}
+
+    scan_limit = min(max_scan_rows, len(raw))
+    for h in range(scan_limit):
+        temp = pd.read_excel(file_path, sheet_name=sheet_name, header=h)
+        temp = normalize_columns(temp)
+        cols = set(temp.columns)
+        score = 0
+        if cols & product_candidates:
+            score += 1
+        if cols & origin_candidates:
+            score += 1
+        if cols & dest_candidates:
+            score += 1
+        if score > best_score:
+            best_score = score
+            best_df = temp
+    return best_df
+
+# =========================================================
+# LOAD COMMON DATA
+# =========================================================
+def load_common_data():
+    veh_df = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "vehicles.xlsx")))
+    dist_df = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "distances - dakika.xlsx")))
+
+    vehicle_col = find_first_matching_column(veh_df, ["vehicle_id", "vehicle id", "arac", "araç", "vehicle"])
+    cap_col = find_first_matching_column(veh_df, ["capacity_m2", "capacity", "kapasite", "alan", "area_m2"])
+
+    if vehicle_col is None or cap_col is None:
+        raise ValueError(f"vehicles.xlsx kolonları bulunamadı: {veh_df.columns.tolist()}")
+
+    row = veh_df.iloc[0]
+    vehicle_id = safe_str(row[vehicle_col])
+    capacity = float(row[cap_col])
+
+    from_col = find_first_matching_column(dist_df, ["from_node", "from", "kaynak", "source"])
+    to_col = find_first_matching_column(dist_df, ["to_node", "to", "hedef", "destination", "dest"])
+    dur_col = find_first_matching_column(
+        dist_df,
+        ["duration_min", "duration", "sure", "süre", "travel_time", "travel time"]
+    )
+
+    if from_col is None or to_col is None or dur_col is None:
+        raise ValueError(f"distance kolonları bulunamadı: {dist_df.columns.tolist()}")
+
+    dist = {}
+    for _, r in dist_df.iterrows():
+        i = safe_str(r[from_col])
+        j = safe_str(r[to_col])
+        if i and j:
+            dist[(i, j)] = float(r[dur_col])
+
+    return vehicle_id, capacity, dist
+
+# =========================================================
+# LOAD PRODUCTS
+# =========================================================
+def load_products(file_name, sheet_name):
+    file_path = os.path.join(INPUT_DIR, file_name)
+    df = find_header_row_and_prepare_df(file_path, sheet_name)
+    if df is None or df.empty:
+        raise ValueError(f"{file_name}/{sheet_name} okunamadı.")
+
+    pid_col = find_first_matching_column(df, ["product_id", "product id", "parça", "parca", "id", "ürün", "urun"])
+    origin_col = find_first_matching_column(df, ["origin", "from", "kaynak", "source", "çıkış", "cikis"])
+    dest_col = find_first_matching_column(df, ["destination", "to", "hedef", "dest", "varış", "varis"])
+    ready_col = find_first_matching_column(df, ["ready_time", "ready time", "ep", "hazır_zaman", "hazir_zaman", "ready"])
+    load_col = find_first_matching_column(df, ["load_time", "load time", "slp", "yükleme", "yukleme", "loading"])
+    unload_col = find_first_matching_column(df, ["unload_time", "unload time", "sup", "boşaltma", "bosaltma", "unloading"])
+    area_col = find_first_matching_column(df, ["area_m2", "area", "qp", "m2", "alan", "surface_area"])
+
+    required = {
+        "product_id": pid_col,
+        "origin": origin_col,
+        "destination": dest_col,
+        "ready_time": ready_col,
+        "load_time": load_col,
+        "unload_time": unload_col,
+        "area": area_col,
+    }
+    missing = [k for k, v in required.items() if v is None]
+    if missing:
+        raise ValueError(
+            f"{file_name}/{sheet_name} eksik kolonlar: {missing}. "
+            f"Bulunan: {df.columns.tolist()}"
+        )
+
+    df = df.dropna(subset=[pid_col, origin_col, dest_col])
+
+    parts = {}
+    for _, r in df.iterrows():
+        pid = safe_str(r[pid_col])
+        if not pid:
+            continue
+        parts[pid] = {
+            "origin": safe_str(r[origin_col]),
+            "destination": safe_str(r[dest_col]),
+            "ready_time": ready_to_min(r[ready_col]),
+            "load_time": float(r[load_col]),
+            "unload_time": float(r[unload_col]),
+            "area": float(r[area_col]),
+        }
+    return parts
+
+# =========================================================
+# RT(n)
+# =========================================================
+def calculate_rt(node, parts, dist):
+    """
+    RT(n) = max(
+        max_{p: op=n} max(e_p, c(h,n)),
+        max_{p: dp=n} [ max(e_p, c(h,op)) + sl_p + c(op,n) ]
+    )
+    """
+    term1 = 0.0
+    term2 = 0.0
+
+    for p, data in parts.items():
+        if data["origin"] == node:
+            term1 = max(term1, max(data["ready_time"], dist.get(("h", node), 0.0)))
+
+    for p, data in parts.items():
+        if data["destination"] == node:
+            o = data["origin"]
+            candidate = (
+                max(data["ready_time"], dist.get(("h", o), 0.0))
+                + data["load_time"]
+                + dist.get((o, node), 0.0)
+            )
+            term2 = max(term2, candidate)
+
+    return max(term1, term2)
+
+# =========================================================
+# ROUTE WITH UNIQUE NODES
+# =========================================================
+class Route:
+    def __init__(self, vehicle_id, capacity, start_time):
+        self.vehicle_id = vehicle_id
+        self.capacity = capacity
+        self.start_time = start_time
+        self.nodes = ["h", "h"]
+        self.parts = set()
+
+    def customer_nodes(self):
+        return self.nodes[1:-1]
+
+    def node_position(self, node):
+        for idx in range(1, len(self.nodes) - 1):
+            if self.nodes[idx] == node:
+                return idx
+        return -1
+
+    def build_node_events(self, parts):
+        node_pickups = {n: [] for n in self.customer_nodes()}
+        node_deliveries = {n: [] for n in self.customer_nodes()}
+
+        for p in self.parts:
+            o = parts[p]["origin"]
+            d = parts[p]["destination"]
+            if o in node_pickups:
+                node_pickups[o].append(p)
+            if d in node_deliveries:
+                node_deliveries[d].append(p)
+
+        return node_pickups, node_deliveries
+
+    def simulate(self, parts, dist):
+        prev_node = "h"
+        td_prev = self.start_time
+        current_load = 0.0
+
+        timeline = []
+        arrivals_to_dest = {}
+        node_pickups, node_deliveries = self.build_node_events(parts)
+
+        for n in self.customer_nodes():
+            ta_n = td_prev + dist.get((prev_node, n), 0.0)
+
+            pickups_here = sorted(node_pickups.get(n, []))
+            deliveries_here = sorted(node_deliveries.get(n, []))
+
+            unload_total = sum(parts[p]["unload_time"] for p in deliveries_here)
+            load_total = sum(parts[p]["load_time"] for p in pickups_here)
+
+            rt_n = calculate_rt(n, parts, dist)
+
+            # RT(n) bozulmuyor
+            ts_n = max(ta_n, rt_n)
+
+            # node servis süresi = unload + load
+            td_n = ts_n + unload_total + load_total
+
+            # delivery sonra pickup mantığı altında net yük değişimi
+            current_load += sum(parts[p]["area"] for p in pickups_here)
+            current_load -= sum(parts[p]["area"] for p in deliveries_here)
+
+            if current_load > self.capacity + 1e-9:
+                return {
+                    "feasible": False,
+                    "reason": "capacity",
+                    "node": n,
+                    "load": current_load,
+                    "capacity": self.capacity,
+                    "timeline": timeline,
+                }
+
+            # waiting tanımı için destination arrival tutuluyor
+            for p in deliveries_here:
+                arrivals_to_dest[p] = ta_n
+
+            service_type = []
+            if deliveries_here:
+                service_type.append("Delivery")
+            if pickups_here:
+                service_type.append("Pickup")
+            service_type = "+".join(service_type) if service_type else "None"
+
+            timeline.append({
+                "node": n,
+                "service_type": service_type,
+                "ta": ta_n,
+                "rt": rt_n,
+                "ts": ts_n,
+                "td": td_n,
+                "node_wait": ts_n - ta_n,
+                "unload_total": unload_total,
+                "load_total": load_total,
+                "service_total": unload_total + load_total,
+                "load": current_load,
+                "pickups": ",".join(pickups_here),
+                "deliveries": ",".join(deliveries_here),
+            })
+
+            td_prev = td_n
+            prev_node = n
+
+        depot_arrival = td_prev + dist.get((prev_node, "h"), 0.0)
+
+        if depot_arrival > SHIFT_START + T_MAX + 1e-9:
+            return {
+                "feasible": False,
+                "reason": "shift",
+                "depot_arrival": depot_arrival,
+                "limit": SHIFT_START + T_MAX,
+                "timeline": timeline,
+            }
+
+        # precedence check
+        dep_map = {t["node"]: t["td"] for t in timeline}
+        arr_map = {t["node"]: t["ta"] for t in timeline}
+        for p in self.parts:
+            o = parts[p]["origin"]
+            d = parts[p]["destination"]
+            if o not in dep_map or d not in arr_map:
+                return {"feasible": False, "reason": "missing_visit", "part": p}
+            if arr_map[d] + 1e-9 < dep_map[o]:
+                return {
+                    "feasible": False,
+                    "reason": "precedence",
+                    "part": p,
+                    "origin": o,
+                    "destination": d
+                }
+
+        # next-node bilgileri
+        for idx in range(len(timeline)):
+            if idx < len(timeline) - 1:
+                next_node = timeline[idx + 1]["node"]
+                next_arrival = timeline[idx + 1]["ta"]
+                travel_to_next = next_arrival - timeline[idx]["td"]
+            else:
+                next_node = "h"
+                next_arrival = depot_arrival
+                travel_to_next = depot_arrival - timeline[idx]["td"]
+
+            timeline[idx]["next_node"] = next_node
+            timeline[idx]["next_arrival"] = next_arrival
+            timeline[idx]["travel_to_next"] = travel_to_next
+
+        return {
+            "feasible": True,
+            "timeline": timeline,
+            "arrivals_to_dest": arrivals_to_dest,
+            "depot_arrival": depot_arrival,
+        }
+
+    def _calc_distance_increase_insert_two(self, i, j, o, d, dist):
+        r = self.nodes
+        delta_o = (
+            dist.get((r[i - 1], o), 0.0)
+            + dist.get((o, r[i]), 0.0)
+            - dist.get((r[i - 1], r[i]), 0.0)
+        )
+        tmp = r[:i] + [o] + r[i:]
+        delta_d = (
+            dist.get((tmp[j - 1], d), 0.0)
+            + dist.get((d, tmp[j]), 0.0)
+            - dist.get((tmp[j - 1], tmp[j]), 0.0)
+        )
+        return delta_o + delta_d
+
+    def _calc_distance_increase_insert_one(self, pos, node, dist):
+        r = self.nodes
+        return (
+            dist.get((r[pos - 1], node), 0.0)
+            + dist.get((node, r[pos]), 0.0)
+            - dist.get((r[pos - 1], r[pos]), 0.0)
+        )
+
+    def calc_c1(self, trial_route, distance_cost, parts, dist):
+        old_sim = self.simulate(parts, dist)
+        if not old_sim["feasible"]:
+            return float("inf")
+
+        new_sim = trial_route.simulate(parts, dist)
+        if not new_sim["feasible"]:
+            return float("inf")
+
+        old_end = old_sim["depot_arrival"]
+        new_end = new_sim["depot_arrival"]
+        local_shift = max(0.0, new_end - old_end)
+
+        return ALPHA1 * distance_cost + ALPHA2 * local_shift
+
+    def try_insert(self, pid, parts, dist, debug=False):
+        o = parts[pid]["origin"]
+        d = parts[pid]["destination"]
+        o_pos = self.node_position(o)
+        d_pos = self.node_position(d)
+
+        best_cost = float("inf")
+        best_spec = None
+
+        # Case D: both nodes already exist
+        if o_pos >= 0 and d_pos >= 0:
+            if o_pos < d_pos:
+                trial = copy.deepcopy(self)
+                trial.parts.add(pid)
+                sim = trial.simulate(parts, dist)
+                if sim["feasible"]:
+                    best_cost = 0.0
+                    best_spec = {"case": "D"}
+                elif debug:
+                    print(f"RED -> part={pid}, case=D, reason={sim.get('reason')}, info={sim}")
+            else:
+                if debug:
+                    print(f"RED -> part={pid}, case=D_wrong_order, origin_pos={o_pos}, dest_pos={d_pos}")
+            return best_cost, best_spec
+
+        # Case A: both absent
+        if o_pos < 0 and d_pos < 0:
+            for i in range(1, len(self.nodes)):
+                for j in range(i + 1, len(self.nodes) + 1):
+                    trial = copy.deepcopy(self)
+                    trial.nodes.insert(i, o)
+                    trial.nodes.insert(j, d)
+                    trial.parts.add(pid)
+
+                    sim = trial.simulate(parts, dist)
+                    if not sim["feasible"]:
+                        if debug:
+                            print(f"RED -> part={pid}, case=A, pos=({i},{j}), reason={sim.get('reason')}, info={sim}")
+                        continue
+
+                    dist_cost = self._calc_distance_increase_insert_two(i, j, o, d, dist)
+                    c1 = self.calc_c1(trial, dist_cost, parts, dist)
+
+                    if c1 < best_cost:
+                        best_cost = c1
+                        best_spec = {"case": "A", "i": i, "j": j}
+            return best_cost, best_spec
+
+        # Case B: origin present, destination absent
+        if o_pos >= 0 and d_pos < 0:
+            for j in range(o_pos + 1, len(self.nodes) + 1):
+                trial = copy.deepcopy(self)
+                trial.nodes.insert(j, d)
+                trial.parts.add(pid)
+
+                sim = trial.simulate(parts, dist)
+                if not sim["feasible"]:
+                    if debug:
+                        print(f"RED -> part={pid}, case=B, pos=({j}), reason={sim.get('reason')}, info={sim}")
+                    continue
+
+                dist_cost = self._calc_distance_increase_insert_one(j, d, dist)
+                c1 = self.calc_c1(trial, dist_cost, parts, dist)
+
+                if c1 < best_cost:
+                    best_cost = c1
+                    best_spec = {"case": "B", "j": j}
+            return best_cost, best_spec
+
+        # Case C: origin absent, destination present
+        if o_pos < 0 and d_pos >= 0:
+            for i in range(1, d_pos + 1):
+                trial = copy.deepcopy(self)
+                trial.nodes.insert(i, o)
+                trial.parts.add(pid)
+
+                sim = trial.simulate(parts, dist)
+                if not sim["feasible"]:
+                    if debug:
+                        print(f"RED -> part={pid}, case=C, pos=({i}), reason={sim.get('reason')}, info={sim}")
+                    continue
+
+                dist_cost = self._calc_distance_increase_insert_one(i, o, dist)
+                c1 = self.calc_c1(trial, dist_cost, parts, dist)
+
+                if c1 < best_cost:
+                    best_cost = c1
+                    best_spec = {"case": "C", "i": i}
+            return best_cost, best_spec
+
+        return best_cost, best_spec
+
+    def apply(self, pid, spec, parts):
+        self.parts.add(pid)
+        case = spec["case"]
+
+        if case == "A":
+            self.nodes.insert(spec["i"], parts[pid]["origin"])
+            self.nodes.insert(spec["j"], parts[pid]["destination"])
+        elif case == "B":
+            self.nodes.insert(spec["j"], parts[pid]["destination"])
+        elif case == "C":
+            self.nodes.insert(spec["i"], parts[pid]["origin"])
+        elif case == "D":
+            pass
+
+# =========================================================
+# METRICS
+# =========================================================
+def compute_f1(sim_result):
+    return sim_result["depot_arrival"] - SHIFT_START
+
+def compute_f2(parts, sim_result):
+    """
+    Waiting tanımı:
+    w[p] = max(0, ta(dp) + su[p] - e[p])
+    """
+    total_wait = 0.0
+    waits = {}
+
+    for p, ta_dp in sim_result["arrivals_to_dest"].items():
+        wp = max(0.0, ta_dp + parts[p]["unload_time"] - parts[p]["ready_time"])
+        waits[p] = wp
+        total_wait += wp
+
+    return total_wait, waits
+
+# =========================================================
+# SOLVER
+# =========================================================
+def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
+    xl = pd.ExcelFile(os.path.join(INPUT_DIR, file_name))
+
+    summary_rows = []
+    timeline_rows = []
+    part_wait_rows = []
+
+    for sheet in xl.sheet_names:
+        print(f">>> solving: {file_name} | {sheet}")
+
+        parts = load_products(file_name, sheet)
+        unrouted = set(parts.keys())
+        route = Route(vehicle_id, capacity, SHIFT_START)
+
+        while unrouted:
+            best_choice = None
+            best_c2 = -float("inf")
+
+            for p in sorted(unrouted):
+                c1, spec = route.try_insert(p, parts, dist, debug=debug)
+                if spec is not None:
+                    c2 = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
+                    if c2 > best_c2:
+                        best_c2 = c2
+                        best_choice = (p, spec, c1, c2)
+
+            if best_choice is None:
+                print(f"UYARI: {file_name} | {sheet} için insert edilemeyen parça kaldı.")
+                break
+
+            p, spec, _, _ = best_choice
+            route.apply(p, spec, parts)
+            unrouted.remove(p)
+
+        sim = route.simulate(parts, dist)
+
+        if sim["feasible"]:
+            f1 = compute_f1(sim)
+            f2, part_waits = compute_f2(parts, sim)
+
+            summary_rows.append({
+                "file": file_name,
+                "sheet": sheet,
+                "vehicle": vehicle_id,
+                "num_parts_routed": len(route.parts),
+                "route_nodes": " -> ".join(route.nodes),
+                "F1_route_time": f1,
+                "F2_total_wait": f2,
+                "depot_arrival": sim["depot_arrival"],
+            })
+
+            for row in sim["timeline"]:
+                timeline_rows.append({
+                    "file": file_name,
+                    "sheet": sheet,
+                    "vehicle": vehicle_id,
+                    "node": row["node"],
+                    "service_type": row["service_type"],
+                    "ta": row["ta"],
+                    "rt": row["rt"],
+                    "ts": row["ts"],
+                    "td": row["td"],
+                    "node_wait": row["node_wait"],
+                    "unload_total": row["unload_total"],
+                    "load_total": row["load_total"],
+                    "service_total": row["service_total"],
+                    "vehicle_load_after_node": row["load"],
+                    "pickups": row["pickups"],
+                    "deliveries": row["deliveries"],
+                    "next_node": row["next_node"],
+                    "next_arrival": row["next_arrival"],
+                    "travel_to_next": row["travel_to_next"],
+                })
+
+            for p in sorted(route.parts):
+                part_wait_rows.append({
+                    "file": file_name,
+                    "sheet": sheet,
+                    "vehicle": vehicle_id,
+                    "product": p,
+                    "origin": parts[p]["origin"],
+                    "destination": parts[p]["destination"],
+                    "ready_time_ep": parts[p]["ready_time"],
+                    "arrival_destination_ta": sim["arrivals_to_dest"].get(p),
+                    "unload_time_su": parts[p]["unload_time"],
+                    "w_p": part_waits.get(p),
+                })
+        else:
+            summary_rows.append({
+                "file": file_name,
+                "sheet": sheet,
+                "vehicle": vehicle_id,
+                "num_parts_routed": len(route.parts),
+                "route_nodes": "INFEASIBLE",
+                "F1_route_time": None,
+                "F2_total_wait": None,
+                "depot_arrival": None,
+            })
+
+    return summary_rows, timeline_rows, part_wait_rows
+
+# =========================================================
+# RUN ALL
+# =========================================================
+def run_all(debug=False):
+    vehicle_id, capacity, dist = load_common_data()
+
+    all_summary = []
+    all_timeline = []
+    all_part_waits = []
+
+    for f in FILES:
+        file_path = os.path.join(INPUT_DIR, f)
+        if not os.path.exists(file_path):
+            print(f"Dosya bulunamadı, atlandı: {file_path}")
+            continue
+
+        s, t, pw = solve_file(f, vehicle_id, capacity, dist, debug=debug)
+        all_summary.extend(s)
+        all_timeline.extend(t)
+        all_part_waits.extend(pw)
+
+    with pd.ExcelWriter(OUTPUT_FILE, engine="openpyxl") as writer:
+        pd.DataFrame(all_summary).to_excel(writer, sheet_name="summary", index=False)
+        pd.DataFrame(all_timeline).to_excel(writer, sheet_name="timeline_detail", index=False)
+        pd.DataFrame(all_part_waits).to_excel(writer, sheet_name="part_waits", index=False)
+
+    print("\nİŞLEM TAMAM.")
+    print("Çıktı dosyası:", OUTPUT_FILE)
+
+if __name__ == "__main__":
+    run_all(debug=False)
