@@ -127,7 +127,7 @@ U = len(Nw)
 
 M_16 = T_max + C_max
 M_20 = T_max
-M_22 = T_max - e_min
+M_22 = T_max + SHIFT_START - e_min
 M_24 = Q_max
 M_25 = Q_max
 
