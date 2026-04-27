@@ -430,7 +430,7 @@ for p in P:
     for k in K:
         for r in R:
             m.addConstr(
-                w[p] >= ta[dp, k, r] - ep - M_22 * (1 - f[p, k, r]),
+                w[p] >= t_a[d_p, k, r] + s_u - e[p] - M22 * (1 - f[p, k, r]))
                 name=f"c22[{p},{k},{r}]"
             )
 
