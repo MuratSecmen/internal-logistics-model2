@@ -1,25 +1,3 @@
-"""
-Solomon I1-PDP Insertion Heuristic — MILP-Format Output
-==========================================================
-Changes vs. original:
-  1. Capacity constraint REMOVED from simulate()
-  2. minutes_to_hhmm() helper added
-  3. extract_milp_vars() extracts MILP-equivalent variable values from
-     heuristic solution (x, f, u, z, w, ta, td, ts, y, delta, itinerary)
-  4. write_milp_format_excel() writes 12-sheet Excel identical in
-     structure to the MILP/Gurobi output
-  5. One Excel file produced per (file, sheet) instance
-
-w_p definition aligned with MILP constraint (22):
-    w_p = max(0, ta_{d_p} - e_p)
-    (NOT ta_{d_p} + s^u_p - e_p — the +s^u term was in the original
-     heuristic but is absent from the MILP formulation; flagged as
-     a modelling consistency issue for thesis.)
-
-M_22 note: the correct tight Big-M is M_22 = T_start + T_max - e_min = 465,
-NOT the PDF value of 45.  The code below uses 465.
-"""
-
 import os
 import copy
 from datetime import datetime
