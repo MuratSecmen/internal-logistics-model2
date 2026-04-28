@@ -12,11 +12,12 @@ FILES = [
     "products_4part.xlsx",
     "products_5part.xlsx",
     "products_6part.xlsx",
+    "products_10part.xlsx",
 ]
 
-SHIFT_START = 420   # 07:00 in absolute minutes
-T_MAX       = 480   # shift duration (minutes)
-SHIFT_END   = SHIFT_START + T_MAX  # 900
+SHIFT_START = 0
+T_MAX       = 480
+SHIFT_END   = SHIFT_START + T_MAX
 
 LAMBDA_C2 = 1.0
 ALPHA1    = 1.0
@@ -117,7 +118,6 @@ def load_common_data():
     if vehicle_col is None or cap_col is None:
         raise ValueError(f"vehicles.xlsx kolonları bulunamadı: {veh_df.columns.tolist()}")
 
-    # Single-vehicle assumption (first row); extend here for multi-vehicle
     row        = veh_df.iloc[0]
     vehicle_id = safe_str(row[vehicle_col])
     capacity   = float(row[cap_col])
@@ -249,12 +249,6 @@ class Route:
         return node_pickups, node_deliveries
 
     def simulate(self, parts, dist):
-        """
-        Simulate the route and return timing + load information.
-
-        CAPACITY CONSTRAINT: intentionally disabled (per current scope).
-        Re-enable by uncommenting the capacity block below.
-        """
         prev_node      = "h"
         td_prev        = self.start_time
         current_load   = 0.0
@@ -278,12 +272,6 @@ class Route:
             # Load update: deliver first, then pick up
             current_load -= sum(parts[p]["area"] for p in deliveries_here)
             current_load += sum(parts[p]["area"] for p in pickups_here)
-
-            # ---- CAPACITY CHECK (disabled) ----
-            # if current_load > self.capacity + 1e-9:
-            #     return {"feasible": False, "reason": "capacity",
-            #             "node": n, "load": current_load, "timeline": timeline}
-            # ------------------------------------
 
             for p in deliveries_here:
                 arrivals_to_dest[p] = ta_n
@@ -474,14 +462,6 @@ def compute_f1(sim_result):
 
 
 def compute_f2_milp(parts, sim_result):
-    """
-    f2 aligned with MILP constraint (22):
-        w_p = max(0, ta_{d_p} - e_p)
-
-    Note: original heuristic used ta_{d_p} + s^u_p - e_p.
-    The +s^u term is absent from the MILP formulation.
-    Both definitions are recorded in the output for comparison.
-    """
     total_wait    = 0.0
     waits_milp    = {}
     waits_heuristic = {}
@@ -504,21 +484,7 @@ def compute_f2_milp(parts, sim_result):
 # MILP-FORMAT VARIABLE EXTRACTION
 # =========================================================
 def extract_milp_vars(route, parts, dist, sim, k, r=1):
-    """
-    Convert heuristic solution to MILP decision variable tables.
 
-    Variable naming follows the MILP formulation exactly:
-      x_{i,j,k,r}  — arc traversal
-      f_{p,k,r}     — product assignment
-      u_{j,k,r}     — MTZ visit order
-      z_{k,r}       — route activation (derived)
-      w_p           — product waiting time
-      ta_{j,k,r}    — arrival time
-      td_{j,k,r}    — departure time
-      ts_{j,k,r}    — service start time
-      y_{j,k,r}     — load upon leaving j  (= row["load"] from simulate)
-      delta_{j,k,r} — net load change at j (pickups - deliveries)
-    """
     timeline = sim["timeline"]
     nodes_seq = route.nodes  # ['h', n1, n2, ..., 'h']
 
