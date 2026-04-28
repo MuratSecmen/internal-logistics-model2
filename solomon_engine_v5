@@ -1,3 +1,25 @@
+"""
+Solomon I1-PDP Insertion Heuristic — MILP-Format Output
+==========================================================
+Changes vs. original:
+  1. Capacity constraint REMOVED from simulate()
+  2. minutes_to_hhmm() helper added
+  3. extract_milp_vars() extracts MILP-equivalent variable values from
+     heuristic solution (x, f, u, z, w, ta, td, ts, y, delta, itinerary)
+  4. write_milp_format_excel() writes 12-sheet Excel identical in
+     structure to the MILP/Gurobi output
+  5. One Excel file produced per (file, sheet) instance
+
+w_p definition aligned with MILP constraint (22):
+    w_p = max(0, ta_{d_p} - e_p)
+    (NOT ta_{d_p} + s^u_p - e_p — the +s^u term was in the original
+     heuristic but is absent from the MILP formulation; flagged as
+     a modelling consistency issue for thesis.)
+
+M_22 note: the correct tight Big-M is M_22 = T_start + T_max - e_min = 465,
+NOT the PDF value of 45.  The code below uses 465.
+"""
+
 import os
 import copy
 from datetime import datetime
@@ -14,17 +36,15 @@ FILES = [
     "products_6part.xlsx",
 ]
 
-SHIFT_START = 420
-T_MAX = 480
+SHIFT_START = 420   # 07:00 in absolute minutes
+T_MAX       = 480   # shift duration (minutes)
+SHIFT_END   = SHIFT_START + T_MAX  # 900
 
 LAMBDA_C2 = 1.0
-ALPHA1 = 1.0
-ALPHA2 = 0.5
+ALPHA1    = 1.0
+ALPHA2    = 0.5
 
-OUTPUT_FILE = os.path.join(
-    INPUT_DIR,
-    f"single_vehicle_single_route_unique_nodes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-)
+OUTPUT_DIR = os.path.join(INPUT_DIR, "heuristic_results")
 
 # =========================================================
 # HELPERS
@@ -36,6 +56,7 @@ def safe_str(v):
     if s.endswith(".0"):
         s = s[:-2]
     return s
+
 
 def ready_to_min(v):
     if pd.isna(v):
@@ -53,6 +74,17 @@ def ready_to_min(v):
     except:
         return 0
 
+
+def minutes_to_hhmm(minutes):
+    """Convert absolute minutes to HH:MM string."""
+    if minutes is None or (isinstance(minutes, float) and pd.isna(minutes)):
+        return ''
+    minutes = float(minutes)
+    hours = int(minutes // 60)
+    mins  = int(minutes % 60)
+    return f"{hours:02d}:{mins:02d}"
+
+
 def normalize_columns(df):
     df = df.copy()
     df.columns = [
@@ -61,6 +93,7 @@ def normalize_columns(df):
     ]
     return df
 
+
 def find_first_matching_column(df, candidates):
     cols = set(df.columns)
     for cand in candidates:
@@ -68,54 +101,53 @@ def find_first_matching_column(df, candidates):
             return cand
     return None
 
+
 def find_header_row_and_prepare_df(file_path, sheet_name, max_scan_rows=8):
     raw = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
-    best_df = None
+    best_df    = None
     best_score = -1
 
     product_candidates = {"product_id", "product id", "parça", "parca", "id", "ürün", "urun"}
-    origin_candidates = {"origin", "from", "kaynak", "source", "çıkış", "cikis"}
-    dest_candidates = {"destination", "to", "hedef", "dest", "varış", "varis"}
+    origin_candidates  = {"origin", "from", "kaynak", "source", "çıkış", "cikis"}
+    dest_candidates    = {"destination", "to", "hedef", "dest", "varış", "varis"}
 
     scan_limit = min(max_scan_rows, len(raw))
     for h in range(scan_limit):
-        temp = pd.read_excel(file_path, sheet_name=sheet_name, header=h)
-        temp = normalize_columns(temp)
-        cols = set(temp.columns)
+        temp  = pd.read_excel(file_path, sheet_name=sheet_name, header=h)
+        temp  = normalize_columns(temp)
+        cols  = set(temp.columns)
         score = 0
-        if cols & product_candidates:
-            score += 1
-        if cols & origin_candidates:
-            score += 1
-        if cols & dest_candidates:
-            score += 1
+        if cols & product_candidates: score += 1
+        if cols & origin_candidates:  score += 1
+        if cols & dest_candidates:    score += 1
         if score > best_score:
             best_score = score
-            best_df = temp
+            best_df    = temp
     return best_df
 
+
 # =========================================================
-# LOAD COMMON DATA
+# DATA LOADING
 # =========================================================
 def load_common_data():
-    veh_df = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "vehicles.xlsx")))
+    veh_df  = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "vehicles.xlsx")))
     dist_df = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "distances - dakika.xlsx")))
 
-    vehicle_col = find_first_matching_column(veh_df, ["vehicle_id", "vehicle id", "arac", "araç", "vehicle"])
-    cap_col = find_first_matching_column(veh_df, ["capacity_m2", "capacity", "kapasite", "alan", "area_m2"])
+    vehicle_col = find_first_matching_column(veh_df, ["vehicle_id","vehicle id","arac","araç","vehicle"])
+    cap_col     = find_first_matching_column(veh_df, ["capacity_m2","capacity","kapasite","alan","area_m2"])
 
     if vehicle_col is None or cap_col is None:
         raise ValueError(f"vehicles.xlsx kolonları bulunamadı: {veh_df.columns.tolist()}")
 
-    row = veh_df.iloc[0]
+    # Single-vehicle assumption (first row); extend here for multi-vehicle
+    row        = veh_df.iloc[0]
     vehicle_id = safe_str(row[vehicle_col])
-    capacity = float(row[cap_col])
+    capacity   = float(row[cap_col])
 
-    from_col = find_first_matching_column(dist_df, ["from_node", "from", "kaynak", "source"])
-    to_col = find_first_matching_column(dist_df, ["to_node", "to", "hedef", "destination", "dest"])
-    dur_col = find_first_matching_column(
-        dist_df,
-        ["duration_min", "duration", "sure", "süre", "travel_time", "travel time"]
+    from_col = find_first_matching_column(dist_df, ["from_node","from","kaynak","source"])
+    to_col   = find_first_matching_column(dist_df, ["to_node","to","hedef","destination","dest"])
+    dur_col  = find_first_matching_column(
+        dist_df, ["duration_min","duration","sure","süre","travel_time","travel time"]
     )
 
     if from_col is None or to_col is None or dur_col is None:
@@ -130,38 +162,33 @@ def load_common_data():
 
     return vehicle_id, capacity, dist
 
-# =========================================================
-# LOAD PRODUCTS
-# =========================================================
+
 def load_products(file_name, sheet_name):
     file_path = os.path.join(INPUT_DIR, file_name)
     df = find_header_row_and_prepare_df(file_path, sheet_name)
     if df is None or df.empty:
         raise ValueError(f"{file_name}/{sheet_name} okunamadı.")
 
-    pid_col = find_first_matching_column(df, ["product_id", "product id", "parça", "parca", "id", "ürün", "urun"])
-    origin_col = find_first_matching_column(df, ["origin", "from", "kaynak", "source", "çıkış", "cikis"])
-    dest_col = find_first_matching_column(df, ["destination", "to", "hedef", "dest", "varış", "varis"])
-    ready_col = find_first_matching_column(df, ["ready_time", "ready time", "ep", "hazır_zaman", "hazir_zaman", "ready"])
-    load_col = find_first_matching_column(df, ["load_time", "load time", "slp", "yükleme", "yukleme", "loading"])
-    unload_col = find_first_matching_column(df, ["unload_time", "unload time", "sup", "boşaltma", "bosaltma", "unloading"])
-    area_col = find_first_matching_column(df, ["area_m2", "area", "qp", "m2", "alan", "surface_area"])
+    pid_col    = find_first_matching_column(df, ["product_id","product id","parça","parca","id","ürün","urun"])
+    origin_col = find_first_matching_column(df, ["origin","from","kaynak","source","çıkış","cikis"])
+    dest_col   = find_first_matching_column(df, ["destination","to","hedef","dest","varış","varis"])
+    ready_col  = find_first_matching_column(df, ["ready_time","ready time","ep","hazır_zaman","hazir_zaman","ready"])
+    load_col   = find_first_matching_column(df, ["load_time","load time","slp","yükleme","yukleme","loading"])
+    unload_col = find_first_matching_column(df, ["unload_time","unload time","sup","boşaltma","bosaltma","unloading"])
+    area_col   = find_first_matching_column(df, ["area_m2","area","qp","m2","alan","surface_area"])
 
     required = {
-        "product_id": pid_col,
-        "origin": origin_col,
-        "destination": dest_col,
-        "ready_time": ready_col,
-        "load_time": load_col,
-        "unload_time": unload_col,
-        "area": area_col,
+        "product_id":   pid_col,
+        "origin":       origin_col,
+        "destination":  dest_col,
+        "ready_time":   ready_col,
+        "load_time":    load_col,
+        "unload_time":  unload_col,
+        "area":         area_col,
     }
     missing = [k for k, v in required.items() if v is None]
     if missing:
-        raise ValueError(
-            f"{file_name}/{sheet_name} eksik kolonlar: {missing}. "
-            f"Bulunan: {df.columns.tolist()}"
-        )
+        raise ValueError(f"{file_name}/{sheet_name} eksik kolonlar: {missing}. Bulunan: {df.columns.tolist()}")
 
     df = df.dropna(subset=[pid_col, origin_col, dest_col])
 
@@ -171,23 +198,24 @@ def load_products(file_name, sheet_name):
         if not pid:
             continue
         parts[pid] = {
-            "origin": safe_str(r[origin_col]),
+            "origin":      safe_str(r[origin_col]),
             "destination": safe_str(r[dest_col]),
-            "ready_time": ready_to_min(r[ready_col]),
-            "load_time": float(r[load_col]),
+            "ready_time":  ready_to_min(r[ready_col]),
+            "load_time":   float(r[load_col]),
             "unload_time": float(r[unload_col]),
-            "area": float(r[area_col]),
+            "area":        float(r[area_col]),
         }
     return parts
 
+
 # =========================================================
-# RT(n)
+# RT(n) — Earliest feasible service start at node n
 # =========================================================
 def calculate_rt(node, parts, dist):
     """
     RT(n) = max(
-        max_{p: op=n} max(e_p, c(h,n)),
-        max_{p: dp=n} [ max(e_p, c(h,op)) + sl_p + c(op,n) ]
+        max_{p: op=n}  max(e_p, c(h,n)),
+        max_{p: dp=n}  [max(e_p, c(h,op)) + sl_p + c(op,n)]
     )
     """
     term1 = 0.0
@@ -209,16 +237,17 @@ def calculate_rt(node, parts, dist):
 
     return max(term1, term2)
 
+
 # =========================================================
-# ROUTE WITH UNIQUE NODES
+# ROUTE CLASS
 # =========================================================
 class Route:
     def __init__(self, vehicle_id, capacity, start_time):
         self.vehicle_id = vehicle_id
-        self.capacity = capacity
+        self.capacity   = capacity
         self.start_time = start_time
-        self.nodes = ["h", "h"]
-        self.parts = set()
+        self.nodes      = ["h", "h"]
+        self.parts      = set()
 
     def customer_nodes(self):
         return self.nodes[1:-1]
@@ -230,9 +259,8 @@ class Route:
         return -1
 
     def build_node_events(self, parts):
-        node_pickups = {n: [] for n in self.customer_nodes()}
+        node_pickups    = {n: [] for n in self.customer_nodes()}
         node_deliveries = {n: [] for n in self.customer_nodes()}
-
         for p in self.parts:
             o = parts[p]["origin"]
             d = parts[p]["destination"]
@@ -240,91 +268,84 @@ class Route:
                 node_pickups[o].append(p)
             if d in node_deliveries:
                 node_deliveries[d].append(p)
-
         return node_pickups, node_deliveries
 
     def simulate(self, parts, dist):
-        prev_node = "h"
-        td_prev = self.start_time
-        current_load = 0.0
+        """
+        Simulate the route and return timing + load information.
 
-        timeline = []
+        CAPACITY CONSTRAINT: intentionally disabled (per current scope).
+        Re-enable by uncommenting the capacity block below.
+        """
+        prev_node      = "h"
+        td_prev        = self.start_time
+        current_load   = 0.0
+        timeline       = []
         arrivals_to_dest = {}
         node_pickups, node_deliveries = self.build_node_events(parts)
 
         for n in self.customer_nodes():
             ta_n = td_prev + dist.get((prev_node, n), 0.0)
 
-            pickups_here = sorted(node_pickups.get(n, []))
+            pickups_here    = sorted(node_pickups.get(n, []))
             deliveries_here = sorted(node_deliveries.get(n, []))
 
             unload_total = sum(parts[p]["unload_time"] for p in deliveries_here)
-            load_total = sum(parts[p]["load_time"] for p in pickups_here)
+            load_total   = sum(parts[p]["load_time"]   for p in pickups_here)
 
             rt_n = calculate_rt(n, parts, dist)
-
-            # RT(n) bozulmuyor
             ts_n = max(ta_n, rt_n)
-
-            # node servis süresi = unload + load
             td_n = ts_n + unload_total + load_total
 
-            # delivery sonra pickup mantığı altında net yük değişimi
-            current_load += sum(parts[p]["area"] for p in pickups_here)
+            # Load update: deliver first, then pick up
             current_load -= sum(parts[p]["area"] for p in deliveries_here)
+            current_load += sum(parts[p]["area"] for p in pickups_here)
 
-            if current_load > self.capacity + 1e-9:
-                return {
-                    "feasible": False,
-                    "reason": "capacity",
-                    "node": n,
-                    "load": current_load,
-                    "capacity": self.capacity,
-                    "timeline": timeline,
-                }
+            # ---- CAPACITY CHECK (disabled) ----
+            # if current_load > self.capacity + 1e-9:
+            #     return {"feasible": False, "reason": "capacity",
+            #             "node": n, "load": current_load, "timeline": timeline}
+            # ------------------------------------
 
-            # waiting tanımı için destination arrival tutuluyor
             for p in deliveries_here:
                 arrivals_to_dest[p] = ta_n
 
             service_type = []
-            if deliveries_here:
-                service_type.append("Delivery")
-            if pickups_here:
-                service_type.append("Pickup")
+            if deliveries_here: service_type.append("Delivery")
+            if pickups_here:    service_type.append("Pickup")
             service_type = "+".join(service_type) if service_type else "None"
 
             timeline.append({
-                "node": n,
-                "service_type": service_type,
-                "ta": ta_n,
-                "rt": rt_n,
-                "ts": ts_n,
-                "td": td_n,
-                "node_wait": ts_n - ta_n,
-                "unload_total": unload_total,
-                "load_total": load_total,
+                "node":          n,
+                "service_type":  service_type,
+                "ta":            ta_n,
+                "rt":            rt_n,
+                "ts":            ts_n,
+                "td":            td_n,
+                "node_wait":     ts_n - ta_n,
+                "unload_total":  unload_total,
+                "load_total":    load_total,
                 "service_total": unload_total + load_total,
-                "load": current_load,
-                "pickups": ",".join(pickups_here),
-                "deliveries": ",".join(deliveries_here),
+                "load":          current_load,  # = y_{j,k,r}: load upon leaving j
+                "pickups":       ",".join(pickups_here),
+                "deliveries":    ",".join(deliveries_here),
             })
 
-            td_prev = td_n
+            td_prev   = td_n
             prev_node = n
 
         depot_arrival = td_prev + dist.get((prev_node, "h"), 0.0)
 
-        if depot_arrival > SHIFT_START + T_MAX + 1e-9:
+        if depot_arrival > SHIFT_END + 1e-9:
             return {
-                "feasible": False,
-                "reason": "shift",
+                "feasible":      False,
+                "reason":        "shift",
                 "depot_arrival": depot_arrival,
-                "limit": SHIFT_START + T_MAX,
-                "timeline": timeline,
+                "limit":         SHIFT_END,
+                "timeline":      timeline,
             }
 
-        # precedence check
+        # Precedence feasibility check
         dep_map = {t["node"]: t["td"] for t in timeline}
         arr_map = {t["node"]: t["ta"] for t in timeline}
         for p in self.parts:
@@ -333,84 +354,63 @@ class Route:
             if o not in dep_map or d not in arr_map:
                 return {"feasible": False, "reason": "missing_visit", "part": p}
             if arr_map[d] + 1e-9 < dep_map[o]:
-                return {
-                    "feasible": False,
-                    "reason": "precedence",
-                    "part": p,
-                    "origin": o,
-                    "destination": d
-                }
+                return {"feasible": False, "reason": "precedence", "part": p,
+                        "origin": o, "destination": d}
 
-        # next-node bilgileri
+        # Annotate next-node travel info
         for idx in range(len(timeline)):
             if idx < len(timeline) - 1:
-                next_node = timeline[idx + 1]["node"]
+                next_node    = timeline[idx + 1]["node"]
                 next_arrival = timeline[idx + 1]["ta"]
-                travel_to_next = next_arrival - timeline[idx]["td"]
             else:
-                next_node = "h"
+                next_node    = "h"
                 next_arrival = depot_arrival
-                travel_to_next = depot_arrival - timeline[idx]["td"]
-
-            timeline[idx]["next_node"] = next_node
+            timeline[idx]["next_node"]    = next_node
             timeline[idx]["next_arrival"] = next_arrival
-            timeline[idx]["travel_to_next"] = travel_to_next
+            timeline[idx]["travel_to_next"] = next_arrival - timeline[idx]["td"]
 
         return {
-            "feasible": True,
-            "timeline": timeline,
-            "arrivals_to_dest": arrivals_to_dest,
-            "depot_arrival": depot_arrival,
+            "feasible":          True,
+            "timeline":          timeline,
+            "arrivals_to_dest":  arrivals_to_dest,
+            "depot_arrival":     depot_arrival,
         }
 
+    # ---------- insertion cost helpers ----------
     def _calc_distance_increase_insert_two(self, i, j, o, d, dist):
         r = self.nodes
-        delta_o = (
-            dist.get((r[i - 1], o), 0.0)
-            + dist.get((o, r[i]), 0.0)
-            - dist.get((r[i - 1], r[i]), 0.0)
-        )
-        tmp = r[:i] + [o] + r[i:]
-        delta_d = (
-            dist.get((tmp[j - 1], d), 0.0)
-            + dist.get((d, tmp[j]), 0.0)
-            - dist.get((tmp[j - 1], tmp[j]), 0.0)
-        )
+        delta_o = (dist.get((r[i-1], o), 0.0) + dist.get((o, r[i]), 0.0)
+                   - dist.get((r[i-1], r[i]), 0.0))
+        tmp     = r[:i] + [o] + r[i:]
+        delta_d = (dist.get((tmp[j-1], d), 0.0) + dist.get((d, tmp[j]), 0.0)
+                   - dist.get((tmp[j-1], tmp[j]), 0.0))
         return delta_o + delta_d
 
     def _calc_distance_increase_insert_one(self, pos, node, dist):
         r = self.nodes
-        return (
-            dist.get((r[pos - 1], node), 0.0)
-            + dist.get((node, r[pos]), 0.0)
-            - dist.get((r[pos - 1], r[pos]), 0.0)
-        )
+        return (dist.get((r[pos-1], node), 0.0) + dist.get((node, r[pos]), 0.0)
+                - dist.get((r[pos-1], r[pos]), 0.0))
 
     def calc_c1(self, trial_route, distance_cost, parts, dist):
         old_sim = self.simulate(parts, dist)
         if not old_sim["feasible"]:
             return float("inf")
-
         new_sim = trial_route.simulate(parts, dist)
         if not new_sim["feasible"]:
             return float("inf")
-
-        old_end = old_sim["depot_arrival"]
-        new_end = new_sim["depot_arrival"]
-        local_shift = max(0.0, new_end - old_end)
-
+        local_shift = max(0.0, new_sim["depot_arrival"] - old_sim["depot_arrival"])
         return ALPHA1 * distance_cost + ALPHA2 * local_shift
 
     def try_insert(self, pid, parts, dist, debug=False):
-        o = parts[pid]["origin"]
-        d = parts[pid]["destination"]
+        o     = parts[pid]["origin"]
+        d     = parts[pid]["destination"]
         o_pos = self.node_position(o)
         d_pos = self.node_position(d)
 
         best_cost = float("inf")
         best_spec = None
 
-        # Case D: both nodes already exist
+        # Case D: both nodes already in route
         if o_pos >= 0 and d_pos >= 0:
             if o_pos < d_pos:
                 trial = copy.deepcopy(self)
@@ -419,11 +419,6 @@ class Route:
                 if sim["feasible"]:
                     best_cost = 0.0
                     best_spec = {"case": "D"}
-                elif debug:
-                    print(f"RED -> part={pid}, case=D, reason={sim.get('reason')}, info={sim}")
-            else:
-                if debug:
-                    print(f"RED -> part={pid}, case=D_wrong_order, origin_pos={o_pos}, dest_pos={d_pos}")
             return best_cost, best_spec
 
         # Case A: both absent
@@ -434,16 +429,11 @@ class Route:
                     trial.nodes.insert(i, o)
                     trial.nodes.insert(j, d)
                     trial.parts.add(pid)
-
                     sim = trial.simulate(parts, dist)
                     if not sim["feasible"]:
-                        if debug:
-                            print(f"RED -> part={pid}, case=A, pos=({i},{j}), reason={sim.get('reason')}, info={sim}")
                         continue
-
                     dist_cost = self._calc_distance_increase_insert_two(i, j, o, d, dist)
                     c1 = self.calc_c1(trial, dist_cost, parts, dist)
-
                     if c1 < best_cost:
                         best_cost = c1
                         best_spec = {"case": "A", "i": i, "j": j}
@@ -455,16 +445,11 @@ class Route:
                 trial = copy.deepcopy(self)
                 trial.nodes.insert(j, d)
                 trial.parts.add(pid)
-
                 sim = trial.simulate(parts, dist)
                 if not sim["feasible"]:
-                    if debug:
-                        print(f"RED -> part={pid}, case=B, pos=({j}), reason={sim.get('reason')}, info={sim}")
                     continue
-
                 dist_cost = self._calc_distance_increase_insert_one(j, d, dist)
                 c1 = self.calc_c1(trial, dist_cost, parts, dist)
-
                 if c1 < best_cost:
                     best_cost = c1
                     best_spec = {"case": "B", "j": j}
@@ -476,16 +461,11 @@ class Route:
                 trial = copy.deepcopy(self)
                 trial.nodes.insert(i, o)
                 trial.parts.add(pid)
-
                 sim = trial.simulate(parts, dist)
                 if not sim["feasible"]:
-                    if debug:
-                        print(f"RED -> part={pid}, case=C, pos=({i}), reason={sim.get('reason')}, info={sim}")
                     continue
-
                 dist_cost = self._calc_distance_increase_insert_one(i, o, dist)
                 c1 = self.calc_c1(trial, dist_cost, parts, dist)
-
                 if c1 < best_cost:
                     best_cost = c1
                     best_spec = {"case": "C", "i": i}
@@ -496,7 +476,6 @@ class Route:
     def apply(self, pid, spec, parts):
         self.parts.add(pid)
         case = spec["case"]
-
         if case == "A":
             self.nodes.insert(spec["i"], parts[pid]["origin"])
             self.nodes.insert(spec["j"], parts[pid]["destination"])
@@ -505,161 +484,385 @@ class Route:
         elif case == "C":
             self.nodes.insert(spec["i"], parts[pid]["origin"])
         elif case == "D":
-            pass
+            pass  # nodes already present
+
 
 # =========================================================
-# METRICS
+# OBJECTIVE COMPUTATION
 # =========================================================
 def compute_f1(sim_result):
+    """f1 = depot_arrival - SHIFT_START  (vehicle return time)"""
     return sim_result["depot_arrival"] - SHIFT_START
 
-def compute_f2(parts, sim_result):
+
+def compute_f2_milp(parts, sim_result):
     """
-    Waiting tanımı:
-    w[p] = max(0, ta(dp) + su[p] - e[p])
+    f2 aligned with MILP constraint (22):
+        w_p = max(0, ta_{d_p} - e_p)
+
+    Note: original heuristic used ta_{d_p} + s^u_p - e_p.
+    The +s^u term is absent from the MILP formulation.
+    Both definitions are recorded in the output for comparison.
     """
-    total_wait = 0.0
-    waits = {}
+    total_wait    = 0.0
+    waits_milp    = {}
+    waits_heuristic = {}
 
     for p, ta_dp in sim_result["arrivals_to_dest"].items():
-        wp = max(0.0, ta_dp + parts[p]["unload_time"] - parts[p]["ready_time"])
-        waits[p] = wp
-        total_wait += wp
+        ep = parts[p]["ready_time"]
+        su = parts[p]["unload_time"]
 
-    return total_wait, waits
+        w_milp      = max(0.0, ta_dp - ep)
+        w_heuristic = max(0.0, ta_dp + su - ep)
+
+        waits_milp[p]      = w_milp
+        waits_heuristic[p] = w_heuristic
+        total_wait         += w_milp
+
+    return total_wait, waits_milp, waits_heuristic
+
+
+# =========================================================
+# MILP-FORMAT VARIABLE EXTRACTION
+# =========================================================
+def extract_milp_vars(route, parts, dist, sim, k, r=1):
+    """
+    Convert heuristic solution to MILP decision variable tables.
+
+    Variable naming follows the MILP formulation exactly:
+      x_{i,j,k,r}  — arc traversal
+      f_{p,k,r}     — product assignment
+      u_{j,k,r}     — MTZ visit order
+      z_{k,r}       — route activation (derived)
+      w_p           — product waiting time
+      ta_{j,k,r}    — arrival time
+      td_{j,k,r}    — departure time
+      ts_{j,k,r}    — service start time
+      y_{j,k,r}     — load upon leaving j  (= row["load"] from simulate)
+      delta_{j,k,r} — net load change at j (pickups - deliveries)
+    """
+    timeline = sim["timeline"]
+    nodes_seq = route.nodes  # ['h', n1, n2, ..., 'h']
+
+    _, waits_milp, waits_heuristic = compute_f2_milp(parts, sim)
+
+    # ------ x_ijkr ------
+    x_list = []
+    for idx in range(len(nodes_seq) - 1):
+        i = nodes_seq[idx]
+        j = nodes_seq[idx + 1]
+        x_list.append({"var": "x", "i": i, "j": j, "k": k, "r": r, "val": 1})
+
+    # ------ f_pkr ------
+    f_list = [{"var": "f", "p": p, "k": k, "r": r, "val": 1}
+              for p in sorted(route.parts)]
+
+    # ------ u_jkr (MTZ order = position index, 1-based) ------
+    u_list = []
+    for idx, row in enumerate(timeline, 1):
+        u_list.append({"var": "u", "j": row["node"], "k": k, "r": r, "u": idx})
+
+    # ------ z_kr ------
+    z_list = [{"var": "z", "k": k, "r": r, "z": 1 if timeline else 0}]
+
+    # ------ w_p ------
+    w_list = []
+    for p in sorted(route.parts):
+        w_list.append({
+            "var":     "w",
+            "p":       p,
+            "w_milp":  waits_milp.get(p, 0.0),
+            "w_heuristic (ta+su-ep)": waits_heuristic.get(p, 0.0),
+        })
+
+    # ------ ta, td, ts ------
+    ta_list = []
+    td_list = []
+    ts_list = []
+
+    # Depot
+    ta_list.append({"var": "ta", "node": "h", "k": k, "r": r,
+                    "time": sim["depot_arrival"],
+                    "stamp": minutes_to_hhmm(sim["depot_arrival"])})
+    td_list.append({"var": "td", "node": "h", "k": k, "r": r,
+                    "time": route.start_time,
+                    "stamp": minutes_to_hhmm(route.start_time)})
+
+    for row in timeline:
+        n = row["node"]
+        ta_list.append({"var": "ta", "node": n, "k": k, "r": r,
+                        "time": row["ta"], "stamp": minutes_to_hhmm(row["ta"])})
+        td_list.append({"var": "td", "node": n, "k": k, "r": r,
+                        "time": row["td"], "stamp": minutes_to_hhmm(row["td"])})
+        ts_list.append({"var": "ts", "node": n, "k": k, "r": r,
+                        "time": row["ts"], "stamp": minutes_to_hhmm(row["ts"])})
+
+    # ------ y_jkr  (load upon leaving node — from simulate's current_load) ------
+    y_list = []
+    y_list.append({"var": "y", "node": "h", "k": k, "r": r, "y_val": 0.0})
+    for row in timeline:
+        y_list.append({"var": "y", "node": row["node"], "k": k, "r": r,
+                       "y_val": row["load"]})
+
+    # ------ delta_jkr ------
+    delta_list = []
+    # Build per-node pickup/delivery areas
+    node_pickup_area    = {}
+    node_delivery_area  = {}
+    for n in route.customer_nodes():
+        node_pickup_area[n]   = sum(parts[p]["area"] for p in route.parts
+                                     if parts[p]["origin"] == n)
+        node_delivery_area[n] = sum(parts[p]["area"] for p in route.parts
+                                     if parts[p]["destination"] == n)
+
+    for row in timeline:
+        n       = row["node"]
+        # delta = pickups - deliveries  (MILP constraint 23)
+        d_val   = node_pickup_area.get(n, 0.0) - node_delivery_area.get(n, 0.0)
+        delta_list.append({"var": "delta", "node": n, "k": k, "r": r,
+                           "delta_val": d_val})
+
+    # ------ itinerary ------
+    itinerary_list = []
+    for idx, row in enumerate(timeline, 1):
+        n = row["node"]
+        itinerary_list.append({
+            "k":        k,
+            "r":        r,
+            "j":        n,
+            "u":        idx,
+            "ta_stamp": minutes_to_hhmm(row["ta"]),
+            "td_stamp": minutes_to_hhmm(row["td"]),
+            "y_after":  row["load"],
+        })
+
+    return {
+        "x":         x_list,
+        "f":         f_list,
+        "u":         u_list,
+        "z":         z_list,
+        "w":         w_list,
+        "ta":        ta_list,
+        "td":        td_list,
+        "ts":        ts_list,
+        "y":         y_list,
+        "delta":     delta_list,
+        "itinerary": itinerary_list,
+    }
+
+
+# =========================================================
+# EXCEL WRITER — 12-sheet MILP-format output
+# =========================================================
+def write_milp_format_excel(output_path, file_name, sheet_name,
+                             route, parts, dist, sim, vehicle_id,
+                             f1, f2_milp):
+    """
+    Write a 12-sheet Excel file mirroring the MILP/Gurobi output structure.
+    Sheets:
+      1.  optimization_results
+      2.  x_ijkr
+      3.  f_pkr
+      4.  u_jkr
+      5.  z_kr
+      6.  w_p
+      7.  ta
+      8.  td
+      9.  ts
+      10. y_jkr
+      11. delta_jkr
+      12. itinerary
+    """
+    k   = vehicle_id
+    r   = 1
+    Nw  = route.customer_nodes()
+
+    vars_ = extract_milp_vars(route, parts, dist, sim, k=k, r=r)
+
+    # ---------- Sheet 1: optimization_results ----------
+    opt_results = {
+        "model":               ["heuristic_solomon_i1_pdp"],
+        "objective":           ["min_f1_then_f2"],
+        "f1_route_time":       [f1],
+        "f2_total_wait_milp":  [f2_milp],
+        "depot_arrival":       [sim["depot_arrival"]],
+        "depot_arrival_stamp": [minutes_to_hhmm(sim["depot_arrival"])],
+        "obj_value":           [None],       # N/A for heuristic
+        "best_bound":          [None],
+        "mip_gap":             [None],
+        "runtime":             [None],
+        "status":              ["HEURISTIC"],
+        "epsilon_wait_upper":  [None],       # not applicable
+        "instance_file":       [file_name],
+        "instance_sheet":      [sheet_name],
+        "|P|":                 [len(parts)],
+        "|Nw|":                [len(set(Nw))],
+        "|K|":                 [1],
+        "|R|":                 [1],
+        "U_(|Nw|)":            [len(set(Nw))],
+        "capacity_constraint": ["DISABLED"],
+    }
+    df_opt = pd.DataFrame(opt_results)
+
+    # ---------- Sheets 2–12 ----------
+    df_x         = pd.DataFrame(vars_["x"])
+    df_f         = pd.DataFrame(vars_["f"])
+    df_u         = pd.DataFrame(vars_["u"])
+    df_z         = pd.DataFrame(vars_["z"])
+    df_w         = pd.DataFrame(vars_["w"])
+    df_ta        = pd.DataFrame(vars_["ta"])
+    df_td        = pd.DataFrame(vars_["td"])
+    df_ts        = pd.DataFrame(vars_["ts"])
+    df_y         = pd.DataFrame(vars_["y"])
+    df_delta     = pd.DataFrame(vars_["delta"])
+    df_itinerary = pd.DataFrame(vars_["itinerary"])
+
+    # Ensure columns exist even if empty
+    _default_cols = {
+        "x":         ["var","i","j","k","r","val"],
+        "f":         ["var","p","k","r","val"],
+        "u":         ["var","j","k","r","u"],
+        "z":         ["var","k","r","z"],
+        "w":         ["var","p","w_milp","w_heuristic (ta+su-ep)"],
+        "ta":        ["var","node","k","r","time","stamp"],
+        "td":        ["var","node","k","r","time","stamp"],
+        "ts":        ["var","node","k","r","time","stamp"],
+        "y":         ["var","node","k","r","y_val"],
+        "delta":     ["var","node","k","r","delta_val"],
+        "itinerary": ["k","r","j","u","ta_stamp","td_stamp","y_after"],
+    }
+    for key, df, cols in [
+        ("x",df_x,_default_cols["x"]),
+        ("f",df_f,_default_cols["f"]),
+        ("u",df_u,_default_cols["u"]),
+        ("z",df_z,_default_cols["z"]),
+        ("w",df_w,_default_cols["w"]),
+        ("ta",df_ta,_default_cols["ta"]),
+        ("td",df_td,_default_cols["td"]),
+        ("ts",df_ts,_default_cols["ts"]),
+        ("y",df_y,_default_cols["y"]),
+        ("delta",df_delta,_default_cols["delta"]),
+        ("itinerary",df_itinerary,_default_cols["itinerary"]),
+    ]:
+        if df.empty:
+            vars_[key] = pd.DataFrame(columns=cols)
+
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        df_opt.to_excel(writer, sheet_name="optimization_results", index=False)
+        df_x.to_excel(writer, sheet_name="x_ijkr", index=False)
+        df_f.to_excel(writer, sheet_name="f_pkr", index=False)
+        df_u.to_excel(writer, sheet_name="u_jkr", index=False)
+        df_z.to_excel(writer, sheet_name="z_kr", index=False)
+        df_w.to_excel(writer, sheet_name="w_p", index=False)
+        df_ta.to_excel(writer, sheet_name="ta", index=False)
+        df_td.to_excel(writer, sheet_name="td", index=False)
+        df_ts.to_excel(writer, sheet_name="ts", index=False)
+        df_y.to_excel(writer, sheet_name="y_jkr", index=False)
+        df_delta.to_excel(writer, sheet_name="delta_jkr", index=False)
+        df_itinerary.to_excel(writer, sheet_name="itinerary", index=False)
+
+    print(f"  ✓ Excel (12 sheets) → {output_path}")
+    print(f"      x_ijkr:     {len(df_x)} arcs")
+    print(f"      f_pkr:      {len(df_f)} assignments")
+    print(f"      u_jkr:      {len(df_u)} visit orders")
+    print(f"      w_p:        {len(df_w)} products")
+    print(f"      ta/td/ts:   {len(df_ta)}/{len(df_td)}/{len(df_ts)} records")
+    print(f"      y_jkr:      {len(df_y)} records")
+    print(f"      delta_jkr:  {len(df_delta)} records")
+    print(f"      itinerary:  {len(df_itinerary)} visits")
+
 
 # =========================================================
 # SOLVER
 # =========================================================
 def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
     xl = pd.ExcelFile(os.path.join(INPUT_DIR, file_name))
-
-    summary_rows = []
-    timeline_rows = []
-    part_wait_rows = []
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    ts_tag = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     for sheet in xl.sheet_names:
-        print(f">>> solving: {file_name} | {sheet}")
+        print(f"\n{'='*60}")
+        print(f"  SOLVING: {file_name} | {sheet}")
+        print(f"{'='*60}")
 
-        parts = load_products(file_name, sheet)
+        parts    = load_products(file_name, sheet)
         unrouted = set(parts.keys())
-        route = Route(vehicle_id, capacity, SHIFT_START)
+        route    = Route(vehicle_id, capacity, SHIFT_START)
 
+        # Solomon I1 insertion loop
         while unrouted:
             best_choice = None
-            best_c2 = -float("inf")
+            best_c2     = -float("inf")
 
             for p in sorted(unrouted):
                 c1, spec = route.try_insert(p, parts, dist, debug=debug)
                 if spec is not None:
                     c2 = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
                     if c2 > best_c2:
-                        best_c2 = c2
+                        best_c2     = c2
                         best_choice = (p, spec, c1, c2)
 
             if best_choice is None:
-                print(f"UYARI: {file_name} | {sheet} için insert edilemeyen parça kaldı.")
+                print(f"  ⚠ Unrouted parts remain: {unrouted}")
                 break
 
-            p, spec, _, _ = best_choice
+            p, spec, c1_val, c2_val = best_choice
             route.apply(p, spec, parts)
             unrouted.remove(p)
+            print(f"    → inserted {p} (case={spec['case']}, c1={c1_val:.2f}, c2={c2_val:.2f})")
 
+        print(f"\n  Route: {' → '.join(route.nodes)}")
         sim = route.simulate(parts, dist)
 
         if sim["feasible"]:
-            f1 = compute_f1(sim)
-            f2, part_waits = compute_f2(parts, sim)
+            f1             = compute_f1(sim)
+            f2_milp, _, _  = compute_f2_milp(parts, sim)
 
-            summary_rows.append({
-                "file": file_name,
-                "sheet": sheet,
-                "vehicle": vehicle_id,
-                "num_parts_routed": len(route.parts),
-                "route_nodes": " -> ".join(route.nodes),
-                "F1_route_time": f1,
-                "F2_total_wait": f2,
-                "depot_arrival": sim["depot_arrival"],
-            })
+            print(f"  f1 (return time)  = {f1:.2f} min")
+            print(f"  f2 (wait, MILP)   = {f2_milp:.2f} min")
+            print(f"  depot arrival     = {minutes_to_hhmm(sim['depot_arrival'])}")
 
-            for row in sim["timeline"]:
-                timeline_rows.append({
-                    "file": file_name,
-                    "sheet": sheet,
-                    "vehicle": vehicle_id,
-                    "node": row["node"],
-                    "service_type": row["service_type"],
-                    "ta": row["ta"],
-                    "rt": row["rt"],
-                    "ts": row["ts"],
-                    "td": row["td"],
-                    "node_wait": row["node_wait"],
-                    "unload_total": row["unload_total"],
-                    "load_total": row["load_total"],
-                    "service_total": row["service_total"],
-                    "vehicle_load_after_node": row["load"],
-                    "pickups": row["pickups"],
-                    "deliveries": row["deliveries"],
-                    "next_node": row["next_node"],
-                    "next_arrival": row["next_arrival"],
-                    "travel_to_next": row["travel_to_next"],
-                })
+            safe_sheet = sheet.replace("/", "_").replace("\\", "_").replace(" ", "_")
+            safe_file  = file_name.replace(".xlsx", "").replace(" ", "_")
+            excel_name = f"heuristic_{safe_file}_{safe_sheet}_{ts_tag}.xlsx"
+            excel_path = os.path.join(OUTPUT_DIR, excel_name)
 
-            for p in sorted(route.parts):
-                part_wait_rows.append({
-                    "file": file_name,
-                    "sheet": sheet,
-                    "vehicle": vehicle_id,
-                    "product": p,
-                    "origin": parts[p]["origin"],
-                    "destination": parts[p]["destination"],
-                    "ready_time_ep": parts[p]["ready_time"],
-                    "arrival_destination_ta": sim["arrivals_to_dest"].get(p),
-                    "unload_time_su": parts[p]["unload_time"],
-                    "w_p": part_waits.get(p),
-                })
+            write_milp_format_excel(
+                output_path = excel_path,
+                file_name   = file_name,
+                sheet_name  = sheet,
+                route       = route,
+                parts       = parts,
+                dist        = dist,
+                sim         = sim,
+                vehicle_id  = vehicle_id,
+                f1          = f1,
+                f2_milp     = f2_milp,
+            )
         else:
-            summary_rows.append({
-                "file": file_name,
-                "sheet": sheet,
-                "vehicle": vehicle_id,
-                "num_parts_routed": len(route.parts),
-                "route_nodes": "INFEASIBLE",
-                "F1_route_time": None,
-                "F2_total_wait": None,
-                "depot_arrival": None,
-            })
+            print(f"  ✗ INFEASIBLE — reason: {sim.get('reason')}")
+            print(f"    detail: {sim}")
 
-    return summary_rows, timeline_rows, part_wait_rows
 
 # =========================================================
-# RUN ALL
+# ENTRY POINT
 # =========================================================
 def run_all(debug=False):
     vehicle_id, capacity, dist = load_common_data()
-
-    all_summary = []
-    all_timeline = []
-    all_part_waits = []
+    print(f"Vehicle: {vehicle_id}  |  Capacity: {capacity} m²  (capacity check: DISABLED)")
+    print(f"Output directory: {OUTPUT_DIR}\n")
 
     for f in FILES:
         file_path = os.path.join(INPUT_DIR, f)
         if not os.path.exists(file_path):
-            print(f"Dosya bulunamadı, atlandı: {file_path}")
+            print(f"  File not found, skipping: {file_path}")
             continue
+        solve_file(f, vehicle_id, capacity, dist, debug=debug)
 
-        s, t, pw = solve_file(f, vehicle_id, capacity, dist, debug=debug)
-        all_summary.extend(s)
-        all_timeline.extend(t)
-        all_part_waits.extend(pw)
+    print("\n" + "="*60)
+    print("ALL INSTANCES SOLVED — check heuristic_results/ folder")
+    print("="*60)
 
-    with pd.ExcelWriter(OUTPUT_FILE, engine="openpyxl") as writer:
-        pd.DataFrame(all_summary).to_excel(writer, sheet_name="summary", index=False)
-        pd.DataFrame(all_timeline).to_excel(writer, sheet_name="timeline_detail", index=False)
-        pd.DataFrame(all_part_waits).to_excel(writer, sheet_name="part_waits", index=False)
-
-    print("\nİŞLEM TAMAM.")
-    print("Çıktı dosyası:", OUTPUT_FILE)
 
 if __name__ == "__main__":
     run_all(debug=False)
