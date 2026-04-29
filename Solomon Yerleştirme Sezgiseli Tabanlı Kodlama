@@ -359,7 +359,7 @@ def compute_f2(parts, sim_result):
     for p, ta_dp in sim_result["arrivals_to_dest"].items():
         ep = parts[p]["ready_time"]
         su = parts[p]["unload_time"]
-        w  = max(0.0, ta_dp + su - ep)   # <-- su dahil, MILP ile tutarlı
+        w  = max(0.0, ta_dp + su - ep)
         waits[p]    = w
         total_wait += w
     return total_wait, waits
