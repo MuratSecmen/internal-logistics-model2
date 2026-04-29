@@ -1,0 +1,197 @@
+Terminal çıktısı kaydediliyor: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\terminal_output_2026_04_29_22_23.txt
+
+
+================================================================================
+DATA LOADED
+================================================================================
+|N|=26, |Nw|=25, |K|=1, |R|=1, |P|=5
+K=['V1']
+R=[1]
+TIGHT BIG-M:
+  M_16=491.0  M_20=480.0  M_22=465.0
+  M_24=20  M_25=20  U=25
+================================================================================
+
+Set parameter Username
+Set parameter LicenseID to value 2811848
+Academic license - for non-commercial use only - expires 2027-04-22
+================================================================================
+OBJECTIVE FUNCTION
+================================================================================
+Primary objective: min route_duration
+Secondary weighted term: + 0.001 × total_wait
+route_duration = Σ_k ta_h,k,|R| - |K| × SHIFT_START
+================================================================================
+
+================================================================================
+CONSTRAINT (3): EPSILON-CONSTRAINT ON WAITING TIME
+================================================================================
+(3) total_wait <= 84
+================================================================================
+
+================================================================================
+CONSTRAINTS (4)-(9): ROUTE STRUCTURE
+================================================================================
+(4)-(9) Route structure constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (10)-(12): PRODUCT ASSIGNMENT
+================================================================================
+(10)-(12) Assignment and pickup/delivery visit constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (13)-(15): ROUTE TIMING
+================================================================================
+(13)-(15) Route timing constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINT (16): TIME CONSISTENCY
+================================================================================
+(16) Time consistency constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (17)-(19): SERVICE TIMES
+================================================================================
+(17)-(19) Service and ready-time constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (20)-(22): PRECEDENCE / ROUTE TIMING / WAITING
+================================================================================
+(20)-(22) Precedence, route timing and waiting constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (23)-(27): LOAD
+================================================================================
+(23)-(27) Load constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (28)-(32): MTZ AND ROUTE ORDER
+================================================================================
+(28)-(32) MTZ and pickup-before-delivery constraints added.
+================================================================================
+
+================================================================================
+SOLVER SETUP
+================================================================================
+Set parameter TimeLimit to value 600
+Set parameter MIPGap to value 0.01
+Set parameter Presolve to value 2
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_primary_2026_04_29_22_23.txt"
+Time Limit: 600s
+MIP Gap: 0.01
+Log file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_primary_2026_04_29_22_23.txt
+================================================================================
+
+OPTIMIZATION STARTING...
+
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2717 rows, 813 columns and 13589 nonzeros
+Model fingerprint: 0xa79ea924
+Variable types: 133 continuous, 680 integer (655 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 5e+02]
+Presolve removed 2508 rows and 725 columns
+Presolve time: 0.01s
+Presolved: 209 rows, 88 columns, 1155 nonzeros
+Variable types: 19 continuous, 69 integer (61 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 208 rows, 88 columns, 1147 nonzeros
+
+
+Root relaxation: objective 1.500000e-02, 42 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0    0.01500    0   17          -    0.01500      -     -    0s
+     0     0    0.02180    0   26          -    0.02180      -     -    0s
+     0     0    0.02485    0   22          -    0.02485      -     -    0s
+     0     0    0.05598    0   30          -    0.05598      -     -    0s
+     0     0    0.06120    0   29          -    0.06120      -     -    0s
+     0     0    0.06778    0   32          -    0.06778      -     -    0s
+     0     0    0.06858    0   30          -    0.06858      -     -    0s
+     0     0    0.06946    0   32          -    0.06946      -     -    0s
+     0     0    0.06986    0   31          -    0.06986      -     -    0s
+     0     0    0.07061    0   21          -    0.07061      -     -    0s
+     0     0    0.07124    0   25          -    0.07124      -     -    0s
+     0     0    0.07655    0   29          -    0.07655      -     -    0s
+     0     0    0.07736    0   32          -    0.07736      -     -    0s
+     0     0    0.07841    0   31          -    0.07841      -     -    0s
+     0     0    0.07929    0   35          -    0.07929      -     -    0s
+     0     0    0.08012    0   29          -    0.08012      -     -    0s
+     0     0    0.08015    0   27          -    0.08015      -     -    0s
+     0     0   51.01500    0   33          -   51.01500      -     -    0s
+     0     0   51.01500    0   30          -   51.01500      -     -    0s
+     0     0   51.03500    0   24          -   51.03500      -     -    0s
+     0     0   51.03500    0   37          -   51.03500      -     -    0s
+     0     0   51.03500    0   36          -   51.03500      -     -    0s
+     0     0   58.02700    0   35          -   58.02700      -     -    0s
+     0     0   58.02700    0   29          -   58.02700      -     -    0s
+     0     2   58.02700    0   28          -   58.02700      -     -    0s
+
+Cutting planes:
+  Implied bound: 13
+  MIR: 24
+  RLT: 8
+  Relax-and-lift: 2
+  PSD: 1
+
+Explored 702 nodes (5878 simplex iterations) in 0.15 seconds (0.11 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+
+================================================================================
+MODEL IS INFEASIBLE
+================================================================================
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+
+Computing Irreducible Inconsistent Subsystem (IIS)...
+
+           Constraints          |            Bounds           |  Runtime
+      Min       Max     Guess   |   Min       Max     Guess   |
+--------------------------------------------------------------------------
+        0      2717         -         0       158         -           0s
+       64      2093       126         0       149         -           5s
+      115      1135       137         0       137         -          10s
+      141       186         -         0        75         -          13s
+
+Non-minimal IIS computed: 186 constraints, 75 bounds
+IIS runtime: 13.45 seconds (11.71 work units)
+IIS file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\infeasible_route_duration_primary_2026_04_29_22_23.ilp
+
+================================================================================
+PROGRAM COMPLETE
+Terminal output: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\terminal_output_2026_04_29_22_23.txt
+================================================================================

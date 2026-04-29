@@ -38,7 +38,7 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 TIME_LIMIT = 600
 MIP_GAP = 0.01
 SHIFT_START = 0
-EPS_ROUTE_DURATION = 9999
+EPS_ROUTE_DURATION = 85
 ROUTE_DURATION_WEIGHT = 0.001
 
 # =====================================================================

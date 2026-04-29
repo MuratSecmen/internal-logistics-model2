@@ -38,7 +38,7 @@ print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
 TIME_LIMIT = 600
 MIP_GAP = 0.01
 SHIFT_START = 0
-EPS_WAIT = 9999
+EPS_WAIT = 30
 WAIT_WEIGHT = 0.001
 
 # =====================================================================

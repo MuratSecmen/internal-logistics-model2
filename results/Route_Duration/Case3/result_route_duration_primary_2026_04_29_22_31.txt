@@ -1,0 +1,76 @@
+
+Gurobi 12.0.0 (win64) logging started Wed Apr 29 22:31:43 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_primary_2026_04_29_22_31.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2717 rows, 813 columns and 13589 nonzeros
+Model fingerprint: 0x4dbc9ee3
+Variable types: 133 continuous, 680 integer (655 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 5e+02]
+Presolve removed 2602 rows and 768 columns
+Presolve time: 0.00s
+Presolved: 115 rows, 45 columns, 549 nonzeros
+Variable types: 14 continuous, 31 integer (25 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 114 rows, 45 columns, 545 nonzeros
+
+
+Root relaxation: objective 4.164782e+01, 33 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   41.64782    0   14          -   41.64782      -     -    0s
+     0     0   62.57447    0   15          -   62.57447      -     -    0s
+
+Cutting planes:
+  Learned: 1
+  Gomory: 4
+  Cover: 2
+  Implied bound: 11
+  MIR: 21
+  StrongCG: 1
+  RLT: 2
+  Relax-and-lift: 1
+
+Explored 1 nodes (61 simplex iterations) in 0.02 seconds (0.02 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+
+Computing Irreducible Inconsistent Subsystem (IIS)...
+
+           Constraints          |            Bounds           |  Runtime
+      Min       Max     Guess   |   Min       Max     Guess   |
+--------------------------------------------------------------------------
+        0      2717         -         0       158         -           0s
+       87      1361         -         0       138         -           4s
+
+Non-minimal IIS computed: 1361 constraints, 138 bounds
+IIS runtime: 3.86 seconds (3.73 work units)

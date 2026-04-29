@@ -1,0 +1,212 @@
+Terminal çıktısı kaydediliyor: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\terminal_output_2026_04_29_22_19.txt
+
+
+================================================================================
+DATA LOADED
+================================================================================
+|N|=26, |Nw|=25, |K|=1, |R|=1, |P|=5
+K=['V1']
+R=[1]
+TIGHT BIG-M:
+  M_16=491.0  M_20=480.0  M_22=465.0
+  M_24=20  M_25=20  U=25
+================================================================================
+
+Set parameter Username
+Set parameter LicenseID to value 2811848
+Academic license - for non-commercial use only - expires 2027-04-22
+================================================================================
+OBJECTIVE FUNCTION
+================================================================================
+Primary objective: min Σ_p w_p
+Secondary weighted term: + 0.001 × route_duration
+route_duration = Σ_k ta_h,k,|R| - |K| × SHIFT_START
+================================================================================
+
+================================================================================
+CONSTRAINT (3): EPSILON-CONSTRAINT ON ROUTE DURATION
+================================================================================
+(3) route_duration <= 77
+================================================================================
+
+================================================================================
+CONSTRAINTS (4)-(9): ROUTE STRUCTURE
+================================================================================
+(4)-(9) Route structure constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (10)-(12): PRODUCT ASSIGNMENT
+================================================================================
+(10)-(12) Assignment and pickup/delivery visit constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (13)-(15): ROUTE TIMING
+================================================================================
+(13)-(15) Route timing constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINT (16): TIME CONSISTENCY
+================================================================================
+(16) Time consistency constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (17)-(19): SERVICE TIMES
+================================================================================
+(17)-(19) Service and ready-time constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (20)-(22): PRECEDENCE / ROUTE TIMING / WAITING
+================================================================================
+(20)-(22) Precedence, route timing and waiting constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (23)-(27): LOAD
+================================================================================
+(23)-(27) Load constraints added.
+================================================================================
+
+================================================================================
+CONSTRAINTS (28)-(32): MTZ AND ROUTE ORDER
+================================================================================
+(28)-(32) MTZ and pickup-before-delivery constraints added.
+================================================================================
+
+================================================================================
+SOLVER SETUP
+================================================================================
+Set parameter TimeLimit to value 600
+Set parameter MIPGap to value 0.01
+Set parameter Presolve to value 2
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_2026_04_29_22_19.txt"
+Time Limit: 600s
+MIP Gap: 0.01
+Log file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_2026_04_29_22_19.txt
+================================================================================
+
+OPTIMIZATION STARTING...
+
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2717 rows, 813 columns and 13585 nonzeros
+Model fingerprint: 0x319efab0
+Variable types: 133 continuous, 680 integer (655 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 5e+02]
+Presolve removed 2340 rows and 677 columns
+Presolve time: 0.12s
+Presolved: 377 rows, 136 columns, 2217 nonzeros
+Variable types: 21 continuous, 115 integer (105 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 376 rows, 136 columns, 2207 nonzeros
+
+
+Root relaxation: objective 1.500000e+01, 78 iterations, 0.04 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   15.00000    0   12          -   15.00000      -     -    0s
+     0     0   15.00000    0   29          -   15.00000      -     -    0s
+     0     0   15.00000    0   28          -   15.00000      -     -    0s
+     0     0   15.00000    0   23          -   15.00000      -     -    0s
+     0     0   15.00000    0   27          -   15.00000      -     -    0s
+     0     0   21.11320    0   25          -   21.11320      -     -    0s
+     0     0   23.60621    0   34          -   23.60621      -     -    0s
+     0     0   23.62215    0   36          -   23.62215      -     -    0s
+     0     0   23.62215    0   34          -   23.62215      -     -    0s
+     0     0   30.37699    0   37          -   30.37699      -     -    0s
+     0     0   30.68872    0   37          -   30.68872      -     -    0s
+     0     0   30.89292    0   37          -   30.89292      -     -    0s
+     0     0   33.37067    0   38          -   33.37067      -     -    0s
+     0     0   34.21516    0   38          -   34.21516      -     -    0s
+     0     0   34.21587    0   40          -   34.21587      -     -    0s
+     0     0   36.31689    0   39          -   36.31689      -     -    0s
+     0     0   36.47740    0   41          -   36.47740      -     -    0s
+     0     0   36.48444    0   42          -   36.48444      -     -    0s
+     0     0   37.63947    0   35          -   37.63947      -     -    0s
+     0     0   37.69712    0   43          -   37.69712      -     -    0s
+     0     0   37.69712    0   44          -   37.69712      -     -    0s
+     0     0   37.86339    0   45          -   37.86339      -     -    0s
+     0     0   38.00567    0   43          -   38.00567      -     -    0s
+     0     0   38.01996    0   44          -   38.01996      -     -    0s
+     0     0   38.01996    0   44          -   38.01996      -     -    0s
+     0     0   38.36946    0   41          -   38.36946      -     -    0s
+     0     0   38.44465    0   44          -   38.44465      -     -    0s
+     0     0   38.44465    0   44          -   38.44465      -     -    0s
+     0     0   38.80186    0   44          -   38.80186      -     -    0s
+     0     0   38.84731    0   45          -   38.84731      -     -    0s
+     0     0   38.84966    0   44          -   38.84966      -     -    0s
+     0     0   40.06776    0   42          -   40.06776      -     -    0s
+     0     0   40.07506    0   45          -   40.07506      -     -    0s
+     0     0   40.09789    0   44          -   40.09789      -     -    0s
+     0     0   40.11688    0   46          -   40.11688      -     -    0s
+     0     0   40.11964    0   48          -   40.11964      -     -    0s
+     0     0   40.15144    0   50          -   40.15144      -     -    0s
+     0     0   40.30588    0   46          -   40.30588      -     -    0s
+     0     0   40.30588    0   47          -   40.30588      -     -    0s
+     0     0   40.30588    0   47          -   40.30588      -     -    0s
+     0     0   40.31381    0   47          -   40.31381      -     -    0s
+     0     0   40.31381    0   47          -   40.31381      -     -    0s
+     0     0   40.31381    0   44          -   40.31381      -     -    0s
+     0     2   40.31850    0   43          -   40.31850      -     -    0s
+*  421   396              16      91.0770000   43.05900  52.7%  12.7    0s
+
+Cutting planes:
+  Learned: 16
+  Gomory: 1
+  Cover: 7
+  Implied bound: 50
+  MIR: 59
+  StrongCG: 2
+  Flow cover: 107
+  Inf proof: 15
+  RLT: 17
+  Relax-and-lift: 44
+
+Explored 18712 nodes (302933 simplex iterations) in 2.01 seconds (1.86 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 1: 91.077 
+
+Optimal solution found (tolerance 1.00e-02)
+Best objective 9.107700000000e+01, best bound 9.107700000000e+01, gap 0.0000%
+
+================================================================================
+SOLUTION FOUND
+================================================================================
+Total wait: 91.00
+Route duration: 77.00
+Objective value: 91.0770
+Runtime: 2.01s
+MIP Gap: 0.00%
+================================================================================
+
+================================================================================
+GENERATING EXCEL OUTPUT
+================================================================================
+Output file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_2026_04_29_22_19.xlsx
+
+✓ Excel output successfully generated with 12 sheets
+  File: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_2026_04_29_22_19.xlsx
+
+================================================================================
+PROGRAM COMPLETE
+Terminal output: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\terminal_output_2026_04_29_22_19.txt
+================================================================================

@@ -1,0 +1,100 @@
+
+Gurobi 12.0.0 (win64) logging started Wed Apr 29 22:18:06 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_route_duration_2026_04_29_22_18.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2717 rows, 813 columns and 13585 nonzeros
+Model fingerprint: 0x22464941
+Variable types: 133 continuous, 680 integer (655 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 5e+02]
+Presolve removed 2340 rows and 677 columns
+Presolve time: 0.01s
+Presolved: 377 rows, 136 columns, 2217 nonzeros
+Variable types: 21 continuous, 115 integer (105 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 376 rows, 136 columns, 2207 nonzeros
+
+
+Root relaxation: objective 1.500000e+01, 78 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   15.00000    0   19          -   15.00000      -     -    0s
+     0     0   15.00000    0   18          -   15.00000      -     -    0s
+     0     0   15.00000    0   28          -   15.00000      -     -    0s
+     0     0   15.00897    0   23          -   15.00897      -     -    0s
+     0     0   15.03123    0   22          -   15.03123      -     -    0s
+     0     0   21.49145    0   33          -   21.49145      -     -    0s
+     0     0   22.66380    0   34          -   22.66380      -     -    0s
+     0     0   22.66380    0   39          -   22.66380      -     -    0s
+     0     0   30.26257    0   34          -   30.26257      -     -    0s
+     0     0   33.41856    0   40          -   33.41856      -     -    0s
+     0     0   33.47385    0   43          -   33.47385      -     -    0s
+     0     0   33.47385    0   43          -   33.47385      -     -    0s
+     0     0   34.65084    0   38          -   34.65084      -     -    0s
+     0     0   34.82236    0   43          -   34.82236      -     -    0s
+     0     0   34.82236    0   43          -   34.82236      -     -    0s
+     0     0   35.17453    0   45          -   35.17453      -     -    0s
+     0     0   35.75963    0   45          -   35.75963      -     -    0s
+     0     0   35.75963    0   44          -   35.75963      -     -    0s
+     0     0   35.75963    0   45          -   35.75963      -     -    0s
+     0     0   35.75963    0   44          -   35.75963      -     -    0s
+     0     2   35.75963    0   43          -   35.75963      -     -    0s
+ 45885  5705 infeasible   27               -   82.02306      -  23.1    5s
+
+Cutting planes:
+  Learned: 1
+  Gomory: 6
+  Implied bound: 12
+  Projected implied bound: 3
+  MIR: 15
+  Mixing: 2
+  StrongCG: 2
+  Flow cover: 115
+  RLT: 11
+  Relax-and-lift: 5
+
+Explored 67049 nodes (1546205 simplex iterations) in 6.80 seconds (7.02 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+
+Computing Irreducible Inconsistent Subsystem (IIS)...
+
+           Constraints          |            Bounds           |  Runtime
+      Min       Max     Guess   |   Min       Max     Guess   |
+--------------------------------------------------------------------------
+        0      2717         -         0       158         -           0s
+        1      2684         -         0       152         -           9s
+        7      2684         -         0       152         -          21s
+        7      2684         -         0       152         -          21s
+
+Non-minimal IIS computed: 2684 constraints, 152 bounds
+IIS runtime: 21.36 seconds (20.86 work units)
