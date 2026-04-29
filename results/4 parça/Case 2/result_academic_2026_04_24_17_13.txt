@@ -1,0 +1,44 @@
+
+Gurobi 12.0.0 (win64) logging started Fri Apr 24 17:13:26 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_academic_2026_04_24_17_13.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2710 rows, 811 columns and 13517 nonzeros
+Model fingerprint: 0xc14999fa
+Variable types: 132 continuous, 679 integer (654 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 9e+02]
+Presolve removed 2681 rows and 799 columns
+Presolve time: 0.01s
+Presolved: 29 rows, 12 columns, 83 nonzeros
+Variable types: 12 continuous, 0 integer (0 binary)
+Root relaxation presolve removed 21 rows and 3 columns
+Root relaxation presolved: 8 rows, 9 columns, 19 nonzeros
+
+
+Root relaxation: objective 7.306800e+01, 0 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0      73.0680000   73.06800  0.00%     -    0s
+
+Explored 1 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 1: 73.068 
+
+Optimal solution found (tolerance 1.00e-02)
+Best objective 7.306800000000e+01, best bound 7.306800000000e+01, gap 0.0000%

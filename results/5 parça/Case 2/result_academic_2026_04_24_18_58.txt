@@ -1,0 +1,87 @@
+
+Gurobi 12.0.0 (win64) logging started Fri Apr 24 18:58:50 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_academic_2026_04_24_18_58.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2717 rows, 813 columns and 13589 nonzeros
+Model fingerprint: 0x2e410a94
+Variable types: 133 continuous, 680 integer (655 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 9e+02]
+Presolve removed 2480 rows and 714 columns
+Presolve time: 0.01s
+Presolved: 237 rows, 99 columns, 1253 nonzeros
+Variable types: 28 continuous, 71 integer (63 binary)
+Root relaxation presolve removed 4 rows and 0 columns
+Root relaxation presolved: 233 rows, 102 columns, 1239 nonzeros
+
+
+Root relaxation: objective 2.000000e-02, 57 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0    0.02000    0   14          -    0.02000      -     -    0s
+H    0     0                     132.1000000    0.02000   100%     -    0s
+     0     0    0.02000    0   23  132.10000    0.02000   100%     -    0s
+H    0     0                      77.1000000    0.02000   100%     -    0s
+     0     0    0.02593    0   25   77.10000    0.02593   100%     -    0s
+     0     0    0.05634    0   30   77.10000    0.05634   100%     -    0s
+     0     0    0.06368    0   29   77.10000    0.06368   100%     -    0s
+     0     0    0.07075    0   30   77.10000    0.07075   100%     -    0s
+H    0     0                      72.1000000    0.07114   100%     -    0s
+     0     0    0.07157    0   28   72.10000    0.07157   100%     -    0s
+     0     0    0.07365    0   32   72.10000    0.07365   100%     -    0s
+     0     0    0.07401    0   33   72.10000    0.07401   100%     -    0s
+     0     0    0.07431    0   36   72.10000    0.07431   100%     -    0s
+     0     0    0.07446    0   35   72.10000    0.07446   100%     -    0s
+     0     0    0.07458    0   35   72.10000    0.07458   100%     -    0s
+     0     0    0.07477    0   36   72.10000    0.07477   100%     -    0s
+     0     0    0.07492    0   36   72.10000    0.07492   100%     -    0s
+     0     0    0.07528    0   33   72.10000    0.07528   100%     -    0s
+     0     0    0.07760    0   33   72.10000    0.07760   100%     -    0s
+     0     0   29.06900    0   30   72.10000   29.06900  59.7%     -    0s
+     0     0   50.66415    0   28   72.10000   50.66415  29.7%     -    0s
+     0     0   56.06700    0   30   72.10000   56.06700  22.2%     -    0s
+     0     0   56.06700    0   37   72.10000   56.06700  22.2%     -    0s
+     0     0   56.06700    0   28   72.10000   56.06700  22.2%     -    0s
+     0     0   58.02000    0   31   72.10000   58.02000  19.5%     -    0s
+     0     0   58.02000    0   32   72.10000   58.02000  19.5%     -    0s
+     0     0   58.02000    0   35   72.10000   58.02000  19.5%     -    0s
+     0     0   58.02000    0   23   72.10000   58.02000  19.5%     -    0s
+     0     0   61.05567    0   31   72.10000   61.05567  15.3%     -    0s
+     0     0   61.07300    0   30   72.10000   61.07300  15.3%     -    0s
+     0     0   61.07400    0   28   72.10000   61.07400  15.3%     -    0s
+     0     2   61.07400    0   28   72.10000   61.07400  15.3%     -    0s
+
+Cutting planes:
+  Learned: 11
+  Cover: 5
+  Implied bound: 34
+  Clique: 1
+  MIR: 130
+  StrongCG: 2
+  Inf proof: 5
+  RLT: 8
+  Relax-and-lift: 17
+  PSD: 1
+
+Explored 745 nodes (6987 simplex iterations) in 0.18 seconds (0.13 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 3: 72.1 77.1 132.1 
+
+Optimal solution found (tolerance 1.00e-02)
+Best objective 7.210000000000e+01, best bound 7.210000000000e+01, gap 0.0000%

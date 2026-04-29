@@ -1,0 +1,110 @@
+
+Gurobi 12.0.0 (win64) logging started Fri Apr 24 19:32:52 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_returnlimit_waitobj_2026_04_24_19_32.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  1200
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2724 rows, 815 columns and 13656 nonzeros
+Model fingerprint: 0xdde5cca8
+Variable types: 134 continuous, 681 integer (656 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 9e+02]
+Presolve removed 2434 rows and 704 columns
+Presolve time: 0.01s
+Presolved: 290 rows, 111 columns, 1490 nonzeros
+Variable types: 22 continuous, 89 integer (80 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 289 rows, 111 columns, 1482 nonzeros
+
+
+Root relaxation: objective 2.400000e+01, 53 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   24.00000    0   11          -   24.00000      -     -    0s
+     0     0   24.00000    0   27          -   24.00000      -     -    0s
+     0     0   24.00000    0   27          -   24.00000      -     -    0s
+     0     0   24.30568    0   29          -   24.30568      -     -    0s
+     0     0   27.40869    0   30          -   27.40869      -     -    0s
+     0     0   46.23016    0   42          -   46.23016      -     -    0s
+     0     0   47.68719    0   38          -   47.68719      -     -    0s
+     0     0   47.71369    0   37          -   47.71369      -     -    0s
+     0     0   51.32641    0   41          -   51.32641      -     -    0s
+     0     0   51.51584    0   42          -   51.51584      -     -    0s
+     0     0   51.56892    0   46          -   51.56892      -     -    0s
+     0     0   51.56899    0   46          -   51.56899      -     -    0s
+     0     0   52.89825    0   42          -   52.89825      -     -    0s
+     0     0   53.29753    0   41          -   53.29753      -     -    0s
+     0     0   53.29753    0   44          -   53.29753      -     -    0s
+     0     0   53.29753    0   45          -   53.29753      -     -    0s
+     0     0   53.67570    0   44          -   53.67570      -     -    0s
+     0     0   53.80135    0   43          -   53.80135      -     -    0s
+     0     0   53.81260    0   42          -   53.81260      -     -    0s
+     0     0   54.23122    0   47          -   54.23122      -     -    0s
+     0     0   54.30755    0   47          -   54.30755      -     -    0s
+     0     0   54.30755    0   48          -   54.30755      -     -    0s
+     0     0   54.30755    0   43          -   54.30755      -     -    0s
+     0     0   54.30755    0   43          -   54.30755      -     -    0s
+     0     0   54.30755    0   43          -   54.30755      -     -    0s
+     0     0   54.34265    0   42          -   54.34265      -     -    0s
+     0     0   54.41627    0   47          -   54.41627      -     -    0s
+     0     0   54.41665    0   47          -   54.41665      -     -    0s
+     0     0   54.55383    0   49          -   54.55383      -     -    0s
+     0     0   54.63172    0   51          -   54.63172      -     -    0s
+     0     0   54.66359    0   51          -   54.66359      -     -    0s
+     0     0   54.66359    0   51          -   54.66359      -     -    0s
+     0     0   54.66359    0   51          -   54.66359      -     -    0s
+     0     0   54.68391    0   50          -   54.68391      -     -    0s
+     0     2   54.68391    0   50          -   54.68391      -     -    0s
+
+Cutting planes:
+  Learned: 2
+  Gomory: 1
+  Cover: 5
+  Implied bound: 27
+  MIR: 58
+  StrongCG: 3
+  RLT: 6
+  Relax-and-lift: 17
+  PSD: 1
+
+Explored 7610 nodes (71064 simplex iterations) in 0.36 seconds (0.39 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  1200
+MIPGap  0.01
+Presolve  2
+
+
+Computing Irreducible Inconsistent Subsystem (IIS)...
+
+           Constraints          |            Bounds           |  Runtime
+      Min       Max     Guess   |   Min       Max     Guess   |
+--------------------------------------------------------------------------
+        0      2724         -         0       159         -           0s
+        7      2690         -         0       152         -           2s
+
+Non-minimal IIS computed: 2690 constraints, 152 bounds
+IIS runtime: 2.49 seconds (2.52 work units)

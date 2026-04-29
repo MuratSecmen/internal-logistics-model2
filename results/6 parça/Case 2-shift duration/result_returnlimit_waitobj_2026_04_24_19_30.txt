@@ -1,0 +1,88 @@
+
+Gurobi 12.0.0 (win64) logging started Fri Apr 24 19:30:07 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_returnlimit_waitobj_2026_04_24_19_30.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  1200
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2724 rows, 815 columns and 13656 nonzeros
+Model fingerprint: 0x3eddd274
+Variable types: 134 continuous, 681 integer (656 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 9e+02]
+Presolve removed 2434 rows and 704 columns
+Presolve time: 0.17s
+Presolved: 290 rows, 111 columns, 1482 nonzeros
+Variable types: 22 continuous, 89 integer (80 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 289 rows, 111 columns, 1474 nonzeros
+
+
+Root relaxation: objective 2.400000e+01, 53 iterations, 0.04 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   24.00000    0   13          -   24.00000      -     -    0s
+     0     0   24.00000    0   30          -   24.00000      -     -    0s
+     0     0   24.00000    0   29          -   24.00000      -     -    0s
+     0     0   24.06427    0   30          -   24.06427      -     -    0s
+     0     0   24.57211    0   36          -   24.57211      -     -    0s
+     0     0   52.56088    0   40          -   52.56088      -     -    0s
+     0     0   52.72793    0   38          -   52.72793      -     -    0s
+     0     0   52.73612    0   39          -   52.73612      -     -    0s
+     0     0   56.47482    0   37          -   56.47482      -     -    0s
+     0     0   56.81009    0   41          -   56.81009      -     -    0s
+     0     0   56.89788    0   41          -   56.89788      -     -    0s
+     0     0   58.06605    0   38          -   58.06605      -     -    0s
+     0     0   58.29131    0   42          -   58.29131      -     -    0s
+     0     0   58.38549    0   41          -   58.38549      -     -    0s
+     0     0   58.44080    0   40          -   58.44080      -     -    0s
+     0     0   58.44765    0   41          -   58.44765      -     -    0s
+     0     0   59.49566    0   42          -   59.49566      -     -    0s
+     0     0   59.81767    0   44          -   59.81767      -     -    0s
+     0     0   59.85948    0   45          -   59.85948      -     -    0s
+     0     0   59.86612    0   45          -   59.86612      -     -    0s
+     0     0   59.96729    0   40          -   59.96729      -     -    0s
+     0     0   60.05854    0   45          -   60.05854      -     -    0s
+     0     0   60.14106    0   47          -   60.14106      -     -    0s
+     0     0   60.14517    0   49          -   60.14517      -     -    0s
+     0     0   60.17270    0   44          -   60.17270      -     -    0s
+     0     0   60.20974    0   44          -   60.20974      -     -    0s
+     0     0   60.20974    0   52          -   60.20974      -     -    0s
+     0     0   60.34550    0   51          -   60.34550      -     -    0s
+     0     0   60.34550    0   46          -   60.34550      -     -    0s
+     0     0   60.34550    0   45          -   60.34550      -     -    0s
+     0     2   60.46013    0   45          -   60.46013      -     -    0s
+*  371   310              14     150.0840000   65.09222  56.6%  13.9    0s
+H  632   361                     135.0770000   68.57833  49.2%  13.7    0s
+H 1412   433                     134.0790000   75.51586  43.7%  14.0    0s
+
+Cutting planes:
+  Learned: 12
+  Cover: 6
+  Implied bound: 54
+  MIR: 76
+  StrongCG: 2
+  Inf proof: 4
+  Zero half: 1
+  RLT: 3
+  Relax-and-lift: 54
+
+Explored 3499 nodes (47185 simplex iterations) in 0.77 seconds (0.36 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 3: 134.079 135.077 150.084 
+
+Optimal solution found (tolerance 1.00e-02)
+Best objective 1.340790000000e+02, best bound 1.340790000000e+02, gap 0.0000%

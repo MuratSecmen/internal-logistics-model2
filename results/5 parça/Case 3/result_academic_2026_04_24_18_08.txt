@@ -1,0 +1,60 @@
+
+Gurobi 12.0.0 (win64) logging started Fri Apr 24 18:08:29 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_academic_2026_04_24_18_08.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2717 rows, 813 columns and 13589 nonzeros
+Model fingerprint: 0x72d43c4a
+Variable types: 133 continuous, 680 integer (655 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 1e+03]
+Presolve removed 2571 rows and 754 columns
+Presolve time: 0.01s
+Presolved: 146 rows, 59 columns, 778 nonzeros
+Variable types: 20 continuous, 39 integer (33 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 145 rows, 59 columns, 773 nonzeros
+
+
+Root relaxation: objective 3.098225e+01, 29 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   30.98225    0   17          -   30.98225      -     -    0s
+H    0     0                      89.1420000   30.98225  65.2%     -    0s
+     0     0   55.83984    0   20   89.14200   55.83984  37.4%     -    0s
+     0     0   60.78079    0   19   89.14200   60.78079  31.8%     -    0s
+     0     0   69.12438    0   21   89.14200   69.12438  22.5%     -    0s
+     0     0   71.10000    0   19   89.14200   71.10000  20.2%     -    0s
+     0     0   71.12300    0   17   89.14200   71.12300  20.2%     -    0s
+     0     0   71.13600    0   17   89.14200   71.13600  20.2%     -    0s
+     0     0   78.12300    0    6   89.14200   78.12300  12.4%     -    0s
+     0     0   82.77347    0    6   89.14200   82.77347  7.14%     -    0s
+     0     0   83.03450    0   12   89.14200   83.03450  6.85%     -    0s
+     0     0   83.13800    0    9   89.14200   83.13800  6.74%     -    0s
+
+Cutting planes:
+  Implied bound: 8
+  MIR: 10
+  StrongCG: 1
+
+Explored 1 nodes (192 simplex iterations) in 0.04 seconds (0.03 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 1: 89.142 
+
+Optimal solution found (tolerance 1.00e-02)
+Best objective 8.914200000000e+01, best bound 8.914200000000e+01, gap 0.0000%

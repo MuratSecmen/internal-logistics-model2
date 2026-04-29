@@ -1,0 +1,54 @@
+
+Gurobi 12.0.0 (win64) logging started Fri Apr 24 17:12:28 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\result_academic_2026_04_24_17_12.txt"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 2710 rows, 811 columns and 13517 nonzeros
+Model fingerprint: 0x5f894d1d
+Variable types: 132 continuous, 679 integer (654 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 9e+02]
+Presolve removed 2594 rows and 756 columns
+Presolve time: 0.00s
+Presolved: 116 rows, 55 columns, 503 nonzeros
+Variable types: 22 continuous, 33 integer (27 binary)
+Found heuristic solution: objective 70.0710000
+Root relaxation presolve removed 3 rows and 0 columns
+Root relaxation presolved: 113 rows, 57 columns, 493 nonzeros
+
+
+Root relaxation: objective 2.868981e+01, 29 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   28.68981    0   12   70.07100   28.68981  59.1%     -    0s
+     0     0   66.04200    0   11   70.07100   66.04200  5.75%     -    0s
+     0     0   69.04800    0    9   70.07100   69.04800  1.46%     -    0s
+     0     0   69.06842    0   13   70.07100   69.06842  1.43%     -    0s
+
+Cutting planes:
+  Learned: 1
+  Implied bound: 9
+  MIR: 4
+  RLT: 2
+
+Explored 1 nodes (95 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 1: 70.071 
+
+Optimal solution found (tolerance 1.00e-02)
+Best objective 7.007100000000e+01, best bound 7.007099999999e+01, gap 0.0000%
