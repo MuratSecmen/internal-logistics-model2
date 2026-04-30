@@ -208,6 +208,15 @@ class Route:
             current_load -= sum(parts[p]["area"] for p in deliveries_here)
             current_load += sum(parts[p]["area"] for p in pickups_here)
 
+            # if current_load > self.capacity + 1e-9:
+             #   return {
+             #   "feasible": False,
+             #   "reason":   "capacity",
+             #   "node":     n,
+             #   "load":     current_load,
+             #   "capacity": self.capacity
+             #   }
+
             for p in deliveries_here:
                 arrivals_to_dest[p] = ta_n
 
