@@ -1,8 +1,3 @@
-"""
-Internal logistics multi-objective pickup-and-delivery model.
-Waiting-time primary, route-duration secondary (epsilon-constraint).
-"""
-
 import logging
 import os
 import sys
@@ -13,15 +8,13 @@ import gurobipy as gp
 from gurobipy import GRB, quicksum
 
 
-# Model identity (this file = SR_SV_WT variant; do not change)
 MODEL_NAME = "SR_SV_WT"
 
-# Run parameters (change per run)
-CASE_NAME = "case1"   # case1 | case2 | case3
-EPS_RD    = 9999      # epsilon-constraint upper bound on route duration
+
+CASE_NAME = "case1"
+EPS_RD    = 9999
 
 
-# Output directory hierarchy: results/<MODEL_NAME>/<CASE_NAME>/
 RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
 OUTPUT_DIR = os.path.join(RESULTS_ROOT, MODEL_NAME, CASE_NAME)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -29,14 +22,11 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 
 
-# Solver settings
-TIME_LIMIT = 600       # seconds
-MIP_GAP = 0.01         # 1% relative optimality gap
+TIME_LIMIT = 600
+MIP_GAP = 0.01
 
-# Shift configuration
-SHIFT_START = 0        # minutes from shift start (00:00 reference)
+SHIFT_START = 0
 
-# Lexicographic tie-breaking weight on route duration term
 RD_WEIGHT = 0.001
 
 
@@ -166,11 +156,11 @@ Q_max = 20      # vehicle capacity upper bound (m^2)
 U = len(Nw)
 
 # Tight Big-M coefficients
-BIG_M_TIME       = T_max + C_max                       # constraint (16): time propagation
-BIG_M_PRECEDENCE = T_max                               # constraint (20): pickup-before-delivery
-BIG_M_WAIT       = T_max + SHIFT_START - e_min         # constraint (22): waiting time
-BIG_M_LOAD_LB    = Q_max                               # constraint (24): load lower bound
-BIG_M_LOAD_UB    = Q_max                               # constraint (25): load upper bound
+BIG_M_TIME       = T_max + C_max
+BIG_M_PRECEDENCE = T_max
+BIG_M_WAIT       = T_max + SHIFT_START - e_min
+BIG_M_LOAD_LB    = Q_max
+BIG_M_LOAD_UB    = Q_max
 
 log.info("Data loaded | |N|=%d |Nw|=%d |K|=%d |R|=%d |P|=%d | U=%d",
          len(N), len(Nw), len(K), len(R), len(P), U)
@@ -182,18 +172,17 @@ m = gp.Model(RUN_ID)
 
 # Decision variables
 x     = m.addVars([(i, j, k, r) for i in N for j in N for k in K for r in R if i != j],
-                  vtype=GRB.BINARY, name="x")           # arc traversal
-f     = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")  # product-to-(vehicle, route) assignment
-w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")                       # waiting time per product
-y     = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="y")                 # vehicle load at node
-ta    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ta")                # arrival time
-td    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="td")                # departure time
-ts    = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ts")               # service start time
-u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")               # MTZ position
-delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")  # net load change at node
+                  vtype=GRB.BINARY, name="x")
+f     = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")
+w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
+y     = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="y")
+ta    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ta")
+td    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="td")
+ts    = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ts")
+u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")
+delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")
 
 
-# Objective: min total_wait + lexicographic tie-breaker on route_duration
 total_wait     = quicksum(w[p] for p in P)
 route_duration = quicksum(ta["h", k, MAX_ROUTES] for k in K) - len(K) * SHIFT_START
 
