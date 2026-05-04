@@ -8,15 +8,32 @@ import gurobipy as gp
 from gurobipy import GRB, quicksum
 
 
-# Model identifier (Single/Multi-Route x Single/Multi-Vehicle x RD/WT primary)
-# SR_SV_RD | SR_SV_WT | MR_MV_RD | MR_MV_WT
 MODEL_NAME = "SR_SV_RD"
 
-OUTPUT_DIR = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+# Run parameters (change per run)
+CASE_NAME = "case1"
+EPS_WAIT  = 9999
+
+
+RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+OUTPUT_DIR = os.path.join(RESULTS_ROOT, MODEL_NAME, CASE_NAME)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
-log_file = os.path.join(OUTPUT_DIR, f"{MODEL_NAME}_{timestamp}.log")
+
+
+TIME_LIMIT = 600
+MIP_GAP = 0.01
+
+SHIFT_START = 0
+
+WAIT_WEIGHT = 0.001
+
+
+# Composite run identifier (model + case + epsilon)
+RUN_ID = f"{MODEL_NAME}_{CASE_NAME}_eps{int(EPS_WAIT)}"
+
+log_file = os.path.join(OUTPUT_DIR, f"{RUN_ID}_{timestamp}.log")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,22 +46,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-log.info("Run started | model: %s | log file: %s", MODEL_NAME, log_file)
-
-
-# Solver settings
-TIME_LIMIT = 600
-MIP_GAP = 0.01
-
-# Shift configuration
-SHIFT_START = 0
-
-# Epsilon-constraint upper bound on total waiting time
-# Set sufficiently large for the lexicographic min(route_duration) corner
-EPS_WAIT = 9999
-
-# Lexicographic tie-breaking weight on waiting term
-WAIT_WEIGHT = 0.001
+log.info("Run started | run_id: %s | log file: %s", RUN_ID, log_file)
 
 
 def ready_to_min(v):
@@ -85,7 +87,9 @@ DATA_PATH = r"C:\Users\Asus\Desktop\Er"
 
 nodes = pd.read_excel(os.path.join(DATA_PATH, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(DATA_PATH, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(DATA_PATH, "products.xlsx"))
+products = pd.read_excel(os.path.join(DATA_PATH, "products.xlsx"), sheet_name=CASE_NAME)
+
+log.info("Products loaded | sheet=%s | rows=%d", CASE_NAME, len(products))
 
 
 def read_distance_matrix(path, val_col):
@@ -110,25 +114,20 @@ def read_distance_matrix(path, val_col):
 c = read_distance_matrix(os.path.join(DATA_PATH, "distances - dakika.xlsx"), "duration_min")
 
 
-# Node sets
 nodes["node_id"] = nodes["node_id"].astype(str).str.strip()
 N = nodes["node_id"].dropna().drop_duplicates().tolist()
 Nw = [n for n in N if n != "h"]
 
-# Vehicle set (single-vehicle scenario)
 vehicles["vehicle_id"] = vehicles["vehicle_id"].astype(str).str.strip()
 vehicles = vehicles.dropna(subset=["vehicle_id"]).drop_duplicates("vehicle_id", keep="first")
 vehicles = vehicles.head(1)
 K = vehicles["vehicle_id"].tolist()
 
-# Route set
 MAX_ROUTES = 1
 R = list(range(1, MAX_ROUTES + 1))
 
-# Vehicle capacities
 q_vehicle = dict(zip(K, vehicles["capacity_m2"]))
 
-# Product set and parameters
 products["product_id"] = products["product_id"].astype(str).str.strip()
 products["origin"] = products["origin"].astype(str).str.strip()
 products["destination"] = products["destination"].astype(str).str.strip()
@@ -143,15 +142,13 @@ q_product = dict(zip(P, products["area_m2"]))
 o = dict(zip(P, products["origin"]))
 d = dict(zip(P, products["destination"]))
 
-# Horizon and global bounds
-T_max = 480     # shift horizon in minutes (8 hours)
-C_max = 11      # maximum arc travel time in the network
-e_min = 15      # earliest possible ready_time across products
-Q_max = 20      # vehicle capacity upper bound (m^2)
+T_max = 480
+C_max = 11
+e_min = 15
+Q_max = 20
 
 U = len(Nw)
 
-# Tight Big-M coefficients
 BIG_M_TIME       = T_max + C_max
 BIG_M_PRECEDENCE = T_max
 BIG_M_WAIT       = T_max + SHIFT_START - e_min
@@ -164,7 +161,7 @@ log.info("Big-M | time=%.1f precedence=%.1f wait=%.1f load_lb=%.0f load_ub=%.0f"
          BIG_M_TIME, BIG_M_PRECEDENCE, BIG_M_WAIT, BIG_M_LOAD_LB, BIG_M_LOAD_UB)
 
 
-m = gp.Model(MODEL_NAME)
+m = gp.Model(RUN_ID)
 
 # Decision variables
 x     = m.addVars([(i, j, k, r) for i in N for j in N for k in K for r in R if i != j],
@@ -177,7 +174,6 @@ td    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="td")
 ts    = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ts")
 u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")
 delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")
-
 
 
 route_duration = quicksum(ta["h", k, MAX_ROUTES] for k in K) - len(K) * SHIFT_START
@@ -268,7 +264,7 @@ for k in K:
 log.info("Constraints (13)-(15) added | route timing")
 
 
-# Constraint (16): time propagation along selected arcs
+# Constraint (16): time propagation along selected arcs (Big-M linearization)
 for i in N:
     for j in N:
         if i == j:
@@ -428,15 +424,13 @@ for p in P:
 log.info("Constraints (28)-(32) added | MTZ and route ordering")
 
 
-# Output paths
-excel_filename  = f"result_{MODEL_NAME}_{timestamp}.xlsx"
+excel_filename  = f"result_{RUN_ID}_{timestamp}.xlsx"
 excel_full_path = os.path.join(OUTPUT_DIR, excel_filename)
-gurobi_log_path = os.path.join(OUTPUT_DIR, f"result_{MODEL_NAME}_{timestamp}.log")
+gurobi_log_path = os.path.join(OUTPUT_DIR, f"result_{RUN_ID}_{timestamp}.log")
 
-# Solver parameters
 m.setParam("TimeLimit", TIME_LIMIT)
 m.setParam("MIPGap", MIP_GAP)
-m.setParam("Presolve", 2)              # aggressive presolve
+m.setParam("Presolve", 2)
 m.setParam("LogFile", gurobi_log_path)
 m.update()
 
@@ -463,7 +457,11 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
 
         # Sheet 1: optimization_results
         df_opt = pd.DataFrame([{
+            "run_id":                   RUN_ID,
             "model":                    MODEL_NAME,
+            "case":                     CASE_NAME,
+            "epsilon_wait":             EPS_WAIT,
+            "timestamp":                timestamp,
             "objective":                "min_route_duration_plus_lex_wait",
             "obj_value":                m.objVal,
             "best_bound":               m.ObjBound,
@@ -473,7 +471,6 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
             "route_duration_minutes":   route_duration_val,
             "route_duration_stamp":     minutes_to_hhmm(route_duration_val),
             "total_wait_minutes":       total_wait_val,
-            "epsilon_wait_upper":       EPS_WAIT,
             "wait_slack_remaining":     EPS_WAIT - total_wait_val,
             "wait_weight_in_objective": WAIT_WEIGHT,
             "|N|":                      len(N),
@@ -637,14 +634,42 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
 
     log.info("Excel output written | %d sheets | %s", 12, excel_full_path)
 
+    # Master Pareto table — append run summary
+    master_pareto_path = os.path.join(RESULTS_ROOT, "master_pareto.xlsx")
+
+    new_row = pd.DataFrame([{
+        "run_id":               RUN_ID,
+        "model":                MODEL_NAME,
+        "case":                 CASE_NAME,
+        "epsilon_wait":         EPS_WAIT,
+        "route_duration":       route_duration_val,
+        "total_wait":           total_wait_val,
+        "obj_value":            m.objVal,
+        "best_bound":           m.ObjBound,
+        "mip_gap":              m.MIPGap,
+        "runtime":              m.Runtime,
+        "status":               m.status,
+        "n_products":           len(P),
+        "timestamp":            timestamp,
+    }])
+
+    if os.path.exists(master_pareto_path):
+        existing = pd.read_excel(master_pareto_path)
+        combined = pd.concat([existing, new_row], ignore_index=True)
+    else:
+        combined = new_row
+
+    combined.to_excel(master_pareto_path, index=False)
+    log.info("Master Pareto updated | %d total rows | %s", len(combined), master_pareto_path)
+
 elif m.status == GRB.INFEASIBLE:
     log.error("Model is INFEASIBLE — computing IIS")
     m.computeIIS()
-    iis_file = os.path.join(OUTPUT_DIR, f"infeasible_{MODEL_NAME}_{timestamp}.ilp")
+    iis_file = os.path.join(OUTPUT_DIR, f"infeasible_{RUN_ID}_{timestamp}.ilp")
     m.write(iis_file)
     log.error("IIS written | %s", iis_file)
 
 else:
     log.warning("No solution found | status=%d", m.status)
 
-log.info("Run complete | model=%s", MODEL_NAME)
+log.info("Run complete | run_id=%s", RUN_ID)
