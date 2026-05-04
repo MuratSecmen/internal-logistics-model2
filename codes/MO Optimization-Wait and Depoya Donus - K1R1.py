@@ -1,3 +1,8 @@
+"""
+Internal logistics multi-objective pickup-and-delivery model.
+Waiting-time primary, route-duration secondary (epsilon-constraint).
+"""
+
 import logging
 import os
 import sys
@@ -8,15 +13,37 @@ import gurobipy as gp
 from gurobipy import GRB, quicksum
 
 
-# Model identifier (Single/Multi-Route x Single/Multi-Vehicle x RD/WT primary)
-# SR_SV_RD | SR_SV_WT | MR_MV_RD | MR_MV_WT
+# Model identity (this file = SR_SV_WT variant; do not change)
 MODEL_NAME = "SR_SV_WT"
 
-OUTPUT_DIR = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+# Run parameters (change per run)
+CASE_NAME = "case1"   # case1 | case2 | case3
+EPS_RD    = 9999      # epsilon-constraint upper bound on route duration
+
+
+# Output directory hierarchy: results/<MODEL_NAME>/<CASE_NAME>/
+RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+OUTPUT_DIR = os.path.join(RESULTS_ROOT, MODEL_NAME, CASE_NAME)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
-log_file = os.path.join(OUTPUT_DIR, f"{MODEL_NAME}_{timestamp}.log")
+
+
+# Solver settings
+TIME_LIMIT = 600       # seconds
+MIP_GAP = 0.01         # 1% relative optimality gap
+
+# Shift configuration
+SHIFT_START = 0        # minutes from shift start (00:00 reference)
+
+# Lexicographic tie-breaking weight on route duration term
+RD_WEIGHT = 0.001
+
+
+# Composite run identifier (model + case + epsilon)
+RUN_ID = f"{MODEL_NAME}_{CASE_NAME}_eps{int(EPS_RD)}"
+
+log_file = os.path.join(OUTPUT_DIR, f"{RUN_ID}_{timestamp}.log")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,22 +56,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-log.info("Run started | model: %s | log file: %s", MODEL_NAME, log_file)
-
-
-# Solver settings
-TIME_LIMIT = 600
-MIP_GAP = 0.01
-
-# Shift configuration
-SHIFT_START = 0
-
-# Epsilon-constraint upper bound on route duration
-# Set sufficiently large for the lexicographic min(total_wait) corner
-EPS_RD = 9999
-
-# Lexicographic tie-breaking weight on route duration term
-RD_WEIGHT = 0.001
+log.info("Run started | run_id: %s | log file: %s", RUN_ID, log_file)
 
 
 def ready_to_min(v):
@@ -85,7 +97,9 @@ DATA_PATH = r"C:\Users\Asus\Desktop\Er"
 
 nodes = pd.read_excel(os.path.join(DATA_PATH, "nodes.xlsx"))
 vehicles = pd.read_excel(os.path.join(DATA_PATH, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(DATA_PATH, "products.xlsx"))
+products = pd.read_excel(os.path.join(DATA_PATH, "products.xlsx"), sheet_name=CASE_NAME)
+
+log.info("Products loaded | sheet=%s | rows=%d", CASE_NAME, len(products))
 
 
 def read_distance_matrix(path, val_col):
@@ -144,19 +158,19 @@ o = dict(zip(P, products["origin"]))
 d = dict(zip(P, products["destination"]))
 
 # Horizon and global bounds
-T_max = 480
-C_max = 11
-e_min = 15
-Q_max = 20
+T_max = 480     # shift horizon in minutes (8 hours)
+C_max = 11      # maximum arc travel time in the network
+e_min = 15      # earliest possible ready_time across products
+Q_max = 20      # vehicle capacity upper bound (m^2)
 
 U = len(Nw)
 
 # Tight Big-M coefficients
-BIG_M_TIME       = T_max + C_max
-BIG_M_PRECEDENCE = T_max
-BIG_M_WAIT       = T_max + SHIFT_START - e_min
-BIG_M_LOAD_LB    = Q_max
-BIG_M_LOAD_UB    = Q_max
+BIG_M_TIME       = T_max + C_max                       # constraint (16): time propagation
+BIG_M_PRECEDENCE = T_max                               # constraint (20): pickup-before-delivery
+BIG_M_WAIT       = T_max + SHIFT_START - e_min         # constraint (22): waiting time
+BIG_M_LOAD_LB    = Q_max                               # constraint (24): load lower bound
+BIG_M_LOAD_UB    = Q_max                               # constraint (25): load upper bound
 
 log.info("Data loaded | |N|=%d |Nw|=%d |K|=%d |R|=%d |P|=%d | U=%d",
          len(N), len(Nw), len(K), len(R), len(P), U)
@@ -164,7 +178,7 @@ log.info("Big-M | time=%.1f precedence=%.1f wait=%.1f load_lb=%.0f load_ub=%.0f"
          BIG_M_TIME, BIG_M_PRECEDENCE, BIG_M_WAIT, BIG_M_LOAD_LB, BIG_M_LOAD_UB)
 
 
-m = gp.Model(MODEL_NAME)
+m = gp.Model(RUN_ID)
 
 # Decision variables
 x     = m.addVars([(i, j, k, r) for i in N for j in N for k in K for r in R if i != j],
@@ -179,7 +193,7 @@ u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")            
 delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")  # net load change at node
 
 
-
+# Objective: min total_wait + lexicographic tie-breaker on route_duration
 total_wait     = quicksum(w[p] for p in P)
 route_duration = quicksum(ta["h", k, MAX_ROUTES] for k in K) - len(K) * SHIFT_START
 
@@ -268,7 +282,7 @@ for k in K:
 log.info("Constraints (13)-(15) added | route timing")
 
 
-# Constraint (16): time propagation along selected arcs
+# Constraint (16): time propagation along selected arcs (Big-M linearization)
 for i in N:
     for j in N:
         if i == j:
@@ -429,14 +443,14 @@ log.info("Constraints (28)-(32) added | MTZ and route ordering")
 
 
 # Output paths
-excel_filename  = f"result_{MODEL_NAME}_{timestamp}.xlsx"
+excel_filename  = f"result_{RUN_ID}_{timestamp}.xlsx"
 excel_full_path = os.path.join(OUTPUT_DIR, excel_filename)
-gurobi_log_path = os.path.join(OUTPUT_DIR, f"result_{MODEL_NAME}_{timestamp}.log")
+gurobi_log_path = os.path.join(OUTPUT_DIR, f"result_{RUN_ID}_{timestamp}.log")
 
 # Solver parameters
 m.setParam("TimeLimit", TIME_LIMIT)
 m.setParam("MIPGap", MIP_GAP)
-m.setParam("Presolve", 2)
+m.setParam("Presolve", 2)              # aggressive presolve
 m.setParam("LogFile", gurobi_log_path)
 m.update()
 
@@ -463,7 +477,11 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
 
         # Sheet 1: optimization_results
         df_opt = pd.DataFrame([{
+            "run_id":                   RUN_ID,
             "model":                    MODEL_NAME,
+            "case":                     CASE_NAME,
+            "epsilon_rd":               EPS_RD,
+            "timestamp":                timestamp,
             "objective":                "min_total_wait_plus_lex_route_duration",
             "obj_value":                m.objVal,
             "best_bound":               m.ObjBound,
@@ -473,7 +491,6 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
             "total_wait_minutes":       total_wait_val,
             "route_duration_minutes":   route_duration_val,
             "route_duration_stamp":     minutes_to_hhmm(route_duration_val),
-            "epsilon_rd_upper":         EPS_RD,
             "rd_slack_remaining":       EPS_RD - route_duration_val,
             "rd_weight_in_objective":   RD_WEIGHT,
             "|N|":                      len(N),
@@ -637,14 +654,42 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
 
     log.info("Excel output written | %d sheets | %s", 12, excel_full_path)
 
+    # Master Pareto table — append run summary
+    master_pareto_path = os.path.join(RESULTS_ROOT, "master_pareto.xlsx")
+
+    new_row = pd.DataFrame([{
+        "run_id":               RUN_ID,
+        "model":                MODEL_NAME,
+        "case":                 CASE_NAME,
+        "epsilon_rd":           EPS_RD,
+        "route_duration":       route_duration_val,
+        "total_wait":           total_wait_val,
+        "obj_value":            m.objVal,
+        "best_bound":           m.ObjBound,
+        "mip_gap":              m.MIPGap,
+        "runtime":              m.Runtime,
+        "status":               m.status,
+        "n_products":           len(P),
+        "timestamp":            timestamp,
+    }])
+
+    if os.path.exists(master_pareto_path):
+        existing = pd.read_excel(master_pareto_path)
+        combined = pd.concat([existing, new_row], ignore_index=True)
+    else:
+        combined = new_row
+
+    combined.to_excel(master_pareto_path, index=False)
+    log.info("Master Pareto updated | %d total rows | %s", len(combined), master_pareto_path)
+
 elif m.status == GRB.INFEASIBLE:
     log.error("Model is INFEASIBLE — computing IIS")
     m.computeIIS()
-    iis_file = os.path.join(OUTPUT_DIR, f"infeasible_{MODEL_NAME}_{timestamp}.ilp")
+    iis_file = os.path.join(OUTPUT_DIR, f"infeasible_{RUN_ID}_{timestamp}.ilp")
     m.write(iis_file)
     log.error("IIS written | %s", iis_file)
 
 else:
     log.warning("No solution found | status=%d", m.status)
 
-log.info("Run complete | model=%s", MODEL_NAME)
+log.info("Run complete | run_id=%s", RUN_ID)
