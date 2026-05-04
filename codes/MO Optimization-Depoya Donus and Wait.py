@@ -1,154 +1,151 @@
+import logging
+import os
+import sys
+from datetime import datetime, time
+
 import pandas as pd
 import gurobipy as gp
 from gurobipy import GRB, quicksum
-import os
-from datetime import datetime, time
-import sys
 
-# =====================================================================
-# OUTPUT & LOG
-# =====================================================================
-OUTPUT_DIR = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+
+MODEL_NAME = "MR_MV_RD"
+
+CASE_NAME   = "case1"
+EPS_WAIT    = 9999
+MAX_ROUTES  = 3
+
+
+RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+OUTPUT_DIR = os.path.join(RESULTS_ROOT, MODEL_NAME, CASE_NAME)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-class TeeOutput:
-    def __init__(self, *files):
-        self.files = files
+timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 
-    def write(self, text):
-        for f in self.files:
-            f.write(text)
-            f.flush()
 
-    def flush(self):
-        for f in self.files:
-            f.flush()
-
-timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
-terminal_log_path = os.path.join(OUTPUT_DIR, f"terminal_output_{timestamp}.txt")
-terminal_log_file = open(terminal_log_path, 'w', encoding='utf-8')
-original_stdout = sys.stdout
-sys.stdout = TeeOutput(original_stdout, terminal_log_file)
-
-print(f"Terminal çıktısı kaydediliyor: {terminal_log_path}\n")
-
-# =====================================================================
-# PARAMETERS
-# =====================================================================
 TIME_LIMIT = 600
 MIP_GAP = 0.01
+
 SHIFT_START = 0
-EPS_WAIT = 9999
+
 WAIT_WEIGHT = 0.001
 
-# =====================================================================
-# HELPERS
-# =====================================================================
+
+# Composite run identifier (model + case + max_routes + epsilon)
+RUN_ID = f"{MODEL_NAME}_{CASE_NAME}_R{MAX_ROUTES}_eps{int(EPS_WAIT)}"
+
+log_file = os.path.join(OUTPUT_DIR, f"{RUN_ID}_{timestamp}.log")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-7s | %(message)s",
+    datefmt="%H:%M:%S",
+    handlers=[
+        logging.FileHandler(log_file, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+log = logging.getLogger(__name__)
+
+log.info("Run started | run_id: %s | log file: %s", RUN_ID, log_file)
+
+
 def ready_to_min(v):
+    """Convert ready_time cell value to minutes from midnight."""
     if pd.isna(v):
         return 0
-    if isinstance(v, (pd.Timestamp, datetime)):
-        return int(v.hour) * 60 + int(v.minute)
-    if isinstance(v, time):
-        return int(v.hour) * 60 + int(v.minute)
-    if isinstance(v, (int, float)) and not isinstance(v, bool):
+
+    if isinstance(v, (pd.Timestamp, datetime, time)):
+        return v.hour * 60 + v.minute
+
+    if isinstance(v, (int, float)):
         return int(v)
 
     s = str(v).strip()
-    dt = pd.to_datetime(s, errors='coerce')
-
-    if pd.notna(dt):
-        return int(dt.hour) * 60 + int(dt.minute)
 
     if ":" in s:
         hh, mm = s.split(":")
         return int(hh) * 60 + int(mm)
 
+    dt = pd.to_datetime(s, errors="coerce")
+    if pd.notna(dt):
+        return dt.hour * 60 + dt.minute
+
     return int(float(s))
 
 
 def minutes_to_hhmm(minutes):
+    """Format minutes as HH:MM string."""
     if minutes is None or pd.isna(minutes):
-        return ''
+        return ""
     minutes = float(minutes)
     hours = int(minutes // 60)
     mins = int(minutes % 60)
     return f"{hours:02d}:{mins:02d}"
 
 
-def safe_mipgap(model):
-    try:
-        return model.MIPGap
-    except Exception:
-        return None
+DATA_PATH = r"C:\Users\Asus\Desktop\Er"
+
+nodes = pd.read_excel(os.path.join(DATA_PATH, "nodes.xlsx"))
+vehicles = pd.read_excel(os.path.join(DATA_PATH, "vehicles.xlsx"))
+products = pd.read_excel(os.path.join(DATA_PATH, "products.xlsx"), sheet_name=CASE_NAME)
+
+log.info("Products loaded | sheet=%s | rows=%d", CASE_NAME, len(products))
 
 
-def write_df(writer, df, sheet_name, columns=None):
-    if df is None or df.empty:
-        df = pd.DataFrame(columns=columns if columns is not None else ["empty"])
-    df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-
-# =====================================================================
-# DATA LOADING
-# =====================================================================
-data_path = r"C:\Users\Asus\Desktop\Er\\"
-
-nodes = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
-vehicles = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products = pd.read_excel(os.path.join(data_path, "products.xlsx"))
-
-def _read_dist(path, val_col):
+def read_distance_matrix(path, val_col):
+    """Read OD distance/duration matrix into a dict keyed by (from, to)."""
     df = pd.read_excel(path, sheet_name=0)
 
-    need = ['from_node', 'to_node', val_col]
-    miss = [c for c in need if c not in df.columns]
-    if miss:
-        raise KeyError(f"{os.path.basename(path)} dosyasında eksik kolonlar: {miss}")
+    required = ["from_node", "to_node", val_col]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise KeyError("%s missing columns: %s" % (os.path.basename(path), missing))
 
-    df['from_node'] = df['from_node'].astype(str).str.strip()
-    df['to_node'] = df['to_node'].astype(str).str.strip()
-    df = df.dropna(subset=['from_node', 'to_node', val_col])
-    df = df[df['from_node'] != df['to_node']]
-    df[val_col] = pd.to_numeric(df[val_col], errors='coerce')
-    df = df.dropna(subset=[val_col])
+    df["from_node"] = df["from_node"].astype(str).str.strip()
+    df["to_node"] = df["to_node"].astype(str).str.strip()
+    df[val_col] = pd.to_numeric(df[val_col], errors="coerce")
 
-    return {
-        (r['from_node'], r['to_node']): float(r[val_col])
-        for _, r in df.iterrows()
-    }
+    df = df.dropna(subset=required)
+    df = df[df["from_node"] != df["to_node"]]
 
-c = _read_dist(os.path.join(data_path, "distances - dakika.xlsx"), "duration_min")
+    return dict(zip(zip(df["from_node"], df["to_node"]), df[val_col].astype(float)))
 
-# =====================================================================
-# SETS & PARAMETERS
-# =====================================================================
-nodes['node_id'] = nodes['node_id'].astype(str).str.strip()
-N = nodes['node_id'].dropna().drop_duplicates().tolist()
-Nw = [n for n in N if n != 'h']
 
-vehicles['vehicle_id'] = vehicles['vehicle_id'].astype(str).str.strip()
-vehicles = vehicles.dropna(subset=['vehicle_id']).drop_duplicates('vehicle_id', keep='first')
+c = read_distance_matrix(os.path.join(DATA_PATH, "distances - dakika.xlsx"), "duration_min")
 
-K = vehicles['vehicle_id'].tolist()
-MAX_ROUTES = int(vehicles['max_routes'].max()) if 'max_routes' in vehicles.columns else 5
+
+# Node sets
+nodes["node_id"] = nodes["node_id"].astype(str).str.strip()
+N = nodes["node_id"].dropna().drop_duplicates().tolist()
+Nw = [n for n in N if n != "h"]
+
+# Vehicle set (multi-vehicle scenario — full fleet)
+vehicles["vehicle_id"] = vehicles["vehicle_id"].astype(str).str.strip()
+vehicles = vehicles.dropna(subset=["vehicle_id"]).drop_duplicates("vehicle_id", keep="first")
+K = vehicles["vehicle_id"].tolist()
+
+# Route set (multi-route)
 R = list(range(1, MAX_ROUTES + 1))
 
-q_vehicle = dict(zip(K, vehicles['capacity_m2']))
-products['product_id'] = products['product_id'].astype(str).str.strip()
-products['origin'] = products['origin'].astype(str).str.strip()
-products['destination'] = products['destination'].astype(str).str.strip()
-products = products.dropna(subset=['product_id']).drop_duplicates('product_id', keep='first')
+# Vehicle capacities
+q_vehicle = dict(zip(K, vehicles["capacity_m2"]))
 
-P = products['product_id'].tolist()
+# Product set and parameters
+products["product_id"] = products["product_id"].astype(str).str.strip()
+products["origin"] = products["origin"].astype(str).str.strip()
+products["destination"] = products["destination"].astype(str).str.strip()
+products = products.dropna(subset=["product_id"]).drop_duplicates("product_id", keep="first")
 
-e = dict(zip(P, [ready_to_min(v) for v in products['ready_time']]))
-sl = dict(zip(P, products['load_time']))
-su = dict(zip(P, products['unload_time']))
-q_product = dict(zip(P, products['area_m2']))
-o = dict(zip(P, products['origin']))
-d = dict(zip(P, products['destination']))
+P = products["product_id"].tolist()
 
+e = dict(zip(P, [ready_to_min(v) for v in products["ready_time"]]))
+sl = dict(zip(P, products["load_time"]))
+su = dict(zip(P, products["unload_time"]))
+q_product = dict(zip(P, products["area_m2"]))
+o = dict(zip(P, products["origin"]))
+d = dict(zip(P, products["destination"]))
+
+# Horizon and global bounds
 T_max = 480
 C_max = 11
 e_min = 15
@@ -156,120 +153,80 @@ Q_max = 20
 
 U = len(Nw)
 
-M_16 = T_max + C_max
-M_20 = T_max
-M_22 = T_max + SHIFT_START - e_min
-M_24 = Q_max
-M_25 = Q_max
+# Tight Big-M coefficients
+BIG_M_TIME       = T_max + C_max
+BIG_M_PRECEDENCE = T_max
+BIG_M_WAIT       = T_max + SHIFT_START - e_min
+BIG_M_LOAD_LB    = Q_max
+BIG_M_LOAD_UB    = Q_max
 
-print("\n" + "=" * 80)
-print("DATA LOADED")
-print("=" * 80)
-print(f"|N|={len(N)}, |Nw|={len(Nw)}, |K|={len(K)}, |R|={len(R)}, |P|={len(P)}")
-print(f"K={K}")
-print(f"R={R}")
-print("TIGHT BIG-M:")
-print(f"  M_16={M_16:.1f}  M_20={M_20:.1f}  M_22={M_22:.1f}")
-print(f"  M_24={M_24:.0f}  M_25={M_25:.0f}  U={U}")
-print("=" * 80 + "\n")
+log.info("Data loaded | |N|=%d |Nw|=%d |K|=%d |R|=%d |P|=%d | U=%d",
+         len(N), len(Nw), len(K), len(R), len(P), U)
+log.info("Big-M | time=%.1f precedence=%.1f wait=%.1f load_lb=%.0f load_ub=%.0f",
+         BIG_M_TIME, BIG_M_PRECEDENCE, BIG_M_WAIT, BIG_M_LOAD_LB, BIG_M_LOAD_UB)
 
-# =====================================================================
-# MODEL CREATION
-# =====================================================================
-m = gp.Model("Internal_Logistics_Route_Duration_Primary_Model")
 
-# =====================================================================
-# DECISION VARIABLES
-# =====================================================================
-x = m.addVars(
-    [(i, j, k, r) for i in N for j in N for k in K for r in R if i != j],
-    vtype=GRB.BINARY,
-    name="x"
-)
+m = gp.Model(RUN_ID)
 
-f = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")
-w = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")
-y = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="y")
-ta = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ta")
-td = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="td")
-ts = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ts")
-u = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")
-delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")
+# Decision variables
+x     = m.addVars([(i, j, k, r) for i in N for j in N for k in K for r in R if i != j],
+                  vtype=GRB.BINARY, name="x")           # arc traversal
+f     = m.addVars(P, K, R, vtype=GRB.BINARY, name="f")  # product-to-(vehicle, route) assignment
+w     = m.addVars(P, vtype=GRB.CONTINUOUS, lb=0.0, name="w")                       # waiting time per product
+y     = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="y")                 # vehicle load at node
+ta    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ta")                # arrival time
+td    = m.addVars(N, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="td")                # departure time
+ts    = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=0.0, name="ts")               # service start time
+u     = m.addVars(Nw, K, R, vtype=GRB.INTEGER, lb=0, ub=U, name="u")               # MTZ position
+delta = m.addVars(Nw, K, R, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="delta")  # net load change at node
 
-# =====================================================================
-# OBJECTIVE
-# =====================================================================
-route_duration = quicksum(ta['h', k, MAX_ROUTES] for k in K) - len(K) * SHIFT_START
-total_wait = quicksum(w[p] for p in P)
+
+route_duration = quicksum(ta["h", k, R[-1]] for k in K) - len(K) * SHIFT_START
+total_wait     = quicksum(w[p] for p in P)
 
 m.setObjective(route_duration + WAIT_WEIGHT * total_wait, GRB.MINIMIZE)
 
-print("=" * 80)
-print("OBJECTIVE FUNCTION")
-print("=" * 80)
-print("Primary objective: min route_duration")
-print(f"Secondary weighted term: + {WAIT_WEIGHT} × total_wait")
-print("route_duration = Σ_k ta_h,k,|R| - |K| × SHIFT_START")
-print("=" * 80 + "\n")
+log.info("Objective set | primary: min route_duration | tie-break weight on wait: %g",
+         WAIT_WEIGHT)
 
-# =====================================================================
-# CONSTRAINT (3): EPSILON-CONSTRAINT ON WAITING TIME
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINT (3): EPSILON-CONSTRAINT ON WAITING TIME")
-print("=" * 80)
 
+# Constraint (3): epsilon-bound on total waiting time
 m.addConstr(total_wait <= EPS_WAIT, name="c3_epsilon_wait")
+log.info("Constraint (3) added | total_wait <= %g", EPS_WAIT)
 
-print(f"(3) total_wait <= {EPS_WAIT}")
-print("=" * 80 + "\n")
 
-# =====================================================================
-# CONSTRAINTS (4)-(9): ROUTE STRUCTURE
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (4)-(9): ROUTE STRUCTURE")
-print("=" * 80)
-
+# Constraints (4)-(9): route structure
 for k in K:
     for r in R:
-        out_h = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
-        in_h = quicksum(x[j, 'h', k, r] for j in Nw if (j, 'h', k, r) in x)
+        out_h = quicksum(x["h", j, k, r] for j in Nw if ("h", j, k, r) in x)
+        in_h  = quicksum(x[j, "h", k, r] for j in Nw if (j, "h", k, r) in x)
 
-        m.addConstr(out_h == in_h, name=f"c4[{k},{r}]")
-        m.addConstr(out_h <= 1, name=f"c5[{k},{r}]")
+        m.addConstr(out_h == in_h,  name=f"c4[{k},{r}]")
+        m.addConstr(out_h <= 1,     name=f"c5[{k},{r}]")
 
         m.addConstr(
             quicksum(x[i, j, k, r] for i in N for j in N if (i, j, k, r) in x)
-            <=
-            (2 * len(P) + 1) * quicksum(f[p, k, r] for p in P),
+            <= (2 * len(P) + 1) * quicksum(f[p, k, r] for p in P),
             name=f"c6[{k},{r}]"
         )
 
 for j in Nw:
     for k in K:
         for r in R:
-            inflow = quicksum(x[i, j, k, r] for i in N if i != j and (i, j, k, r) in x)
+            inflow  = quicksum(x[i, j, k, r] for i in N if i != j and (i, j, k, r) in x)
             outflow = quicksum(x[j, i, k, r] for i in N if i != j and (j, i, k, r) in x)
 
             m.addConstr(
                 inflow <= quicksum(f[p, k, r] for p in P if o[p] == j or d[p] == j),
                 name=f"c7[{j},{k},{r}]"
             )
-
             m.addConstr(inflow == outflow, name=f"c8[{j},{k},{r}]")
-            m.addConstr(inflow <= 1, name=f"c9[{j},{k},{r}]")
+            m.addConstr(inflow <= 1,       name=f"c9[{j},{k},{r}]")
 
-print("(4)-(9) Route structure constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (4)-(9) added | route structure")
 
-# =====================================================================
-# CONSTRAINTS (10)-(12): PRODUCT ASSIGNMENT
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (10)-(12): PRODUCT ASSIGNMENT")
-print("=" * 80)
 
+# Constraints (10)-(12): product assignment and pickup/delivery visits
 for p in P:
     m.addConstr(
         quicksum(f[p, k, r] for k in K for r in R) == 1,
@@ -297,34 +254,22 @@ for p in P:
                     name=f"c12[{p},{k},{r}]"
                 )
 
-print("(10)-(12) Assignment and pickup/delivery visit constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (10)-(12) added | product assignment")
 
-# =====================================================================
-# CONSTRAINTS (13)-(15): ROUTE TIMING
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (13)-(15): ROUTE TIMING")
-print("=" * 80)
 
+# Constraints (13)-(15): route timing (shift start, inter-route precedence)
 for k in K:
-    m.addConstr(td['h', k, 1] == SHIFT_START, name=f"c13[{k}]")
+    m.addConstr(td["h", k, R[0]] == SHIFT_START, name=f"c13[{k}]")
 
 for k in K:
     for r in R[1:]:
-        m.addConstr(td['h', k, r] >= ta['h', k, r - 1], name=f"c14[{k},{r}]")
-        m.addConstr(ta['h', k, r] >= ta['h', k, r - 1], name=f"c15[{k},{r}]")
+        m.addConstr(td["h", k, r] >= ta["h", k, r - 1], name=f"c14[{k},{r}]")
+        m.addConstr(ta["h", k, r] >= ta["h", k, r - 1], name=f"c15[{k},{r}]")
 
-print("(13)-(15) Route timing constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (13)-(15) added | route timing")
 
-# =====================================================================
-# CONSTRAINT (16): TIME CONSISTENCY
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINT (16): TIME CONSISTENCY")
-print("=" * 80)
 
+# Constraint (16): time propagation along selected arcs (Big-M linearization)
 for i in N:
     for j in N:
         if i == j:
@@ -332,32 +277,29 @@ for i in N:
         for k in K:
             for r in R:
                 if (i, j, k, r) in x:
-                    c_ij = c.get((i, j), 0.0)
+                    c_ij = c.get((i, j))
+                    if c_ij is None:
+                        log.warning("Missing distance for (%s, %s) | using 0.0", i, j)
+                        c_ij = 0.0
                     m.addConstr(
-                        ta[j, k, r]
-                        >=
-                        td[i, k, r] + c_ij * x[i, j, k, r] - M_16 * (1 - x[i, j, k, r]),
+                        ta[j, k, r] >= td[i, k, r]
+                                       + c_ij * x[i, j, k, r]
+                                       - BIG_M_TIME * (1 - x[i, j, k, r]),
                         name=f"c16[{i},{j},{k},{r}]"
                     )
 
-print("(16) Time consistency constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (16) added | time consistency")
 
-# =====================================================================
-# CONSTRAINTS (17)-(19): SERVICE TIMES
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (17)-(19): SERVICE TIMES")
-print("=" * 80)
 
+# Constraints (17)-(19): service start/end times and ready-time linking
 for j in Nw:
     for k in K:
         for r in R:
             unload = quicksum(su[p] * f[p, k, r] for p in P if d[p] == j)
-            load = quicksum(sl[p] * f[p, k, r] for p in P if o[p] == j)
+            load   = quicksum(sl[p] * f[p, k, r] for p in P if o[p] == j)
 
             m.addConstr(ts[j, k, r] >= ta[j, k, r] + unload, name=f"c17[{j},{k},{r}]")
-            m.addConstr(td[j, k, r] >= ts[j, k, r] + load, name=f"c19[{j},{k},{r}]")
+            m.addConstr(td[j, k, r] >= ts[j, k, r] + load,   name=f"c19[{j},{k},{r}]")
 
 for p in P:
     op = o[p]
@@ -369,16 +311,10 @@ for p in P:
                     name=f"c18[{p},{k},{r}]"
                 )
 
-print("(17)-(19) Service and ready-time constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (17)-(19) added | service times")
 
-# =====================================================================
-# CONSTRAINTS (20)-(22): PRECEDENCE, ROUTE TIMING, WAITING
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (20)-(22): PRECEDENCE / ROUTE TIMING / WAITING")
-print("=" * 80)
 
+# Constraints (20)-(22): pickup-delivery precedence, route closure, waiting
 for p in P:
     op = o[p]
     dp = d[p]
@@ -387,13 +323,14 @@ for p in P:
         for k in K:
             for r in R:
                 m.addConstr(
-                    ta[dp, k, r] >= td[op, k, r] - M_20 * (1 - f[p, k, r]),
+                    ta[dp, k, r] >= td[op, k, r]
+                                    - BIG_M_PRECEDENCE * (1 - f[p, k, r]),
                     name=f"c20[{p},{k},{r}]"
                 )
 
 for k in K:
     for r in R:
-        m.addConstr(ta['h', k, r] >= td['h', k, r], name=f"c21[{k},{r}]")
+        m.addConstr(ta["h", k, r] >= td["h", k, r], name=f"c21[{k},{r}]")
 
 for p in P:
     dp = d[p]
@@ -402,31 +339,25 @@ for p in P:
     for k in K:
         for r in R:
             m.addConstr(
-                w[p] >= ta[dp, k, r] + su[p] - ep - M_22 * (1 - f[p, k, r]),
+                w[p] >= ta[dp, k, r] + su[p] - ep
+                        - BIG_M_WAIT * (1 - f[p, k, r]),
                 name=f"c22[{p},{k},{r}]"
             )
 
-print("(20)-(22) Precedence, route timing and waiting constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (20)-(22) added | precedence, route closure, waiting")
 
-# =====================================================================
-# CONSTRAINTS (23)-(27): LOAD
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (23)-(27): LOAD")
-print("=" * 80)
 
+# Constraints (23)-(27): load propagation, capacity, depot reset
 for j in Nw:
     for k in K:
         for r in R:
-            load_in = quicksum(q_product[p] * f[p, k, r] for p in P if o[p] == j)
+            load_in  = quicksum(q_product[p] * f[p, k, r] for p in P if o[p] == j)
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if d[p] == j)
 
             m.addConstr(
                 delta[j, k, r] >= load_in - load_out,
                 name=f"c23[{j},{k},{r}]"
             )
-
             m.addConstr(y[j, k, r] <= q_vehicle[k], name=f"c26[{j},{k},{r}]")
 
 for i in Nw:
@@ -437,34 +368,30 @@ for i in Nw:
             for r in R:
                 if (i, j, k, r) in x:
                     m.addConstr(
-                        y[j, k, r] >= y[i, k, r] + delta[j, k, r] - M_24 * (1 - x[i, j, k, r]),
+                        y[j, k, r] >= y[i, k, r] + delta[j, k, r]
+                                      - BIG_M_LOAD_LB * (1 - x[i, j, k, r]),
                         name=f"c24[{i},{j},{k},{r}]"
                     )
-
                     m.addConstr(
-                        y[j, k, r] <= y[i, k, r] + delta[j, k, r] + M_25 * (1 - x[i, j, k, r]),
+                        y[j, k, r] <= y[i, k, r] + delta[j, k, r]
+                                      + BIG_M_LOAD_UB * (1 - x[i, j, k, r]),
                         name=f"c25[{i},{j},{k},{r}]"
                     )
 
 for k in K:
     for r in R:
-        m.addConstr(y['h', k, r] == 0, name=f"c27[{k},{r}]")
+        m.addConstr(y["h", k, r] == 0, name=f"c27[{k},{r}]")
 
-print("(23)-(27) Load constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (23)-(27) added | load propagation")
 
-# =====================================================================
-# CONSTRAINTS (28)-(32): ROUTE ORDER / MTZ / PRECEDENCE
-# =====================================================================
-print("=" * 80)
-print("CONSTRAINTS (28)-(32): MTZ AND ROUTE ORDER")
-print("=" * 80)
 
+# Constraints (28)-(32): inter-route ordering, MTZ subtour elimination, pickup-before-delivery
+# (28) is the symmetry-breaking constraint for multi-route: route r+1 only used if route r is used
 for k in K:
     for r in R[:-1]:
-        lhs = quicksum(x['h', j, k, r] for j in Nw if ('h', j, k, r) in x)
-        rhs = quicksum(x['h', j, k, r + 1] for j in Nw if ('h', j, k, r + 1) in x)
-        m.addConstr(lhs >= rhs, name=f"c28[{k},{r}]")
+        out_h_curr = quicksum(x["h", j, k, r]     for j in Nw if ("h", j, k, r)     in x)
+        out_h_next = quicksum(x["h", j, k, r + 1] for j in Nw if ("h", j, k, r + 1) in x)
+        m.addConstr(out_h_curr >= out_h_next, name=f"c28[{k},{r}]")
 
 for i in Nw:
     for j in Nw:
@@ -474,7 +401,8 @@ for i in Nw:
             for r in R:
                 if (i, j, k, r) in x:
                     m.addConstr(
-                        u[j, k, r] >= u[i, k, r] + 1 - U * (1 - x[i, j, k, r]),
+                        u[j, k, r] >= u[i, k, r] + 1
+                                      - U * (1 - x[i, j, k, r]),
                         name=f"c29[{i},{j},{k},{r}]"
                     )
 
@@ -484,7 +412,7 @@ for j in Nw:
             indeg = quicksum(x[i, j, k, r] for i in N if i != j and (i, j, k, r) in x)
 
             m.addConstr(u[j, k, r] <= U * indeg, name=f"c30[{j},{k},{r}]")
-            m.addConstr(u[j, k, r] >= indeg, name=f"c31[{j},{k},{r}]")
+            m.addConstr(u[j, k, r] >= indeg,     name=f"c31[{j},{k},{r}]")
 
 for p in P:
     op = o[p]
@@ -494,282 +422,192 @@ for p in P:
         for k in K:
             for r in R:
                 m.addConstr(
-                    u[dp, k, r] >= u[op, k, r] + 1 - U * (1 - f[p, k, r]),
+                    u[dp, k, r] >= u[op, k, r] + 1
+                                   - U * (1 - f[p, k, r]),
                     name=f"c32[{p},{k},{r}]"
                 )
 
-print("(28)-(32) MTZ and pickup-before-delivery constraints added.")
-print("=" * 80 + "\n")
+log.info("Constraints (28)-(32) added | MTZ and route ordering")
 
-# =====================================================================
-# SOLVER SETUP
-# =====================================================================
-print("=" * 80)
-print("SOLVER SETUP")
-print("=" * 80)
 
-excel_filename = f"result_route_duration_primary_{timestamp}.xlsx"
+excel_filename  = f"result_{RUN_ID}_{timestamp}.xlsx"
 excel_full_path = os.path.join(OUTPUT_DIR, excel_filename)
-log_path = os.path.join(OUTPUT_DIR, f"result_route_duration_primary_{timestamp}.txt")
+gurobi_log_path = os.path.join(OUTPUT_DIR, f"result_{RUN_ID}_{timestamp}.log")
 
-m.setParam('TimeLimit', TIME_LIMIT)
-m.setParam('MIPGap', MIP_GAP)
-m.setParam('Presolve', 2)
-m.setParam('LogFile', log_path)
+m.setParam("TimeLimit", TIME_LIMIT)
+m.setParam("MIPGap", MIP_GAP)
+m.setParam("Presolve", 2)
+m.setParam("LogFile", gurobi_log_path)
 m.update()
 
-print(f"Time Limit: {TIME_LIMIT}s")
-print(f"MIP Gap: {MIP_GAP}")
-print(f"Log file: {log_path}")
-print("=" * 80 + "\n")
+log.info("Solver configured | TimeLimit=%ds | MIPGap=%g | gurobi_log=%s",
+         TIME_LIMIT, MIP_GAP, gurobi_log_path)
+log.info("Optimization starting...")
 
-# =====================================================================
-# OPTIMIZATION
-# =====================================================================
-print("OPTIMIZATION STARTING...\n")
 m.optimize()
 
-# =====================================================================
-# RESULTS PROCESSING
-# =====================================================================
+
 if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
 
-    route_duration_val = sum(ta['h', k, MAX_ROUTES].X for k in K) - len(K) * SHIFT_START
-    total_wait_val = sum(w[p].X for p in P)
+    route_duration_val = sum(ta["h", k, R[-1]].X for k in K) - len(K) * SHIFT_START
+    total_wait_val     = sum(w[p].X for p in P)
 
-    print("\n" + "=" * 80)
-    print("SOLUTION FOUND")
-    print("=" * 80)
-    print(f"Route duration: {route_duration_val:.2f}")
-    print(f"Total wait: {total_wait_val:.2f}")
-    print(f"Objective value: {m.objVal:.4f}")
-    print(f"Runtime: {m.Runtime:.2f}s")
+    log.info("Solution found | route_duration=%.2f | total_wait=%.2f",
+             route_duration_val, total_wait_val)
+    log.info("Objective=%.2f | runtime=%.2fs | MIP Gap=%.2f%%",
+             m.objVal, m.Runtime, m.MIPGap * 100)
 
-    gap = safe_mipgap(m)
-    if gap is not None:
-        print(f"MIP Gap: {gap * 100:.2f}%")
-    else:
-        print("MIP Gap: N/A")
+    log.info("Generating Excel output | %s", excel_full_path)
 
-    print("=" * 80 + "\n")
+    with pd.ExcelWriter(excel_full_path, engine="openpyxl") as writer:
 
-    # =================================================================
-    # EXCEL OUTPUT - 12 SHEETS
-    # =================================================================
-    print("=" * 80)
-    print("GENERATING EXCEL OUTPUT")
-    print("=" * 80)
-    print(f"Output file: {excel_full_path}\n")
-
-    with pd.ExcelWriter(excel_full_path, engine='openpyxl') as writer:
-
+        # Sheet 1: optimization_results
         df_opt = pd.DataFrame([{
-            'model': 'route_duration_primary_wait_weighted',
-            'objective': 'min_route_duration_plus_0.001_total_wait',
-            'obj_value': m.objVal,
-            'best_bound': m.ObjBound,
-            'mip_gap': safe_mipgap(m),
-            'runtime': m.Runtime,
-            'status': m.status,
-            'route_duration_minutes': route_duration_val,
-            'route_duration_stamp': minutes_to_hhmm(route_duration_val),
-            'total_wait_minutes': total_wait_val,
-            'epsilon_wait_upper': EPS_WAIT,
-            'wait_slack_remaining': EPS_WAIT - total_wait_val,
-            'wait_weight_in_objective': WAIT_WEIGHT,
-            '|N|': len(N),
-            '|Nw|': len(Nw),
-            '|K|': len(K),
-            '|R|': len(R),
-            '|P|': len(P),
-            'KxR': len(K) * len(R),
-            'U_(|Nw|)': U,
-            'M_16': M_16,
-            'M_20': M_20,
-            'M_22': M_22,
-            'M_24': M_24,
-            'M_25': M_25
+            "run_id":                   RUN_ID,
+            "model":                    MODEL_NAME,
+            "case":                     CASE_NAME,
+            "max_routes":               MAX_ROUTES,
+            "epsilon_wait":             EPS_WAIT,
+            "timestamp":                timestamp,
+            "objective":                "min_route_duration_plus_lex_wait",
+            "obj_value":                m.objVal,
+            "best_bound":               m.ObjBound,
+            "mip_gap":                  m.MIPGap,
+            "runtime":                  m.Runtime,
+            "status":                   m.status,
+            "route_duration_minutes":   route_duration_val,
+            "route_duration_stamp":     minutes_to_hhmm(route_duration_val),
+            "total_wait_minutes":       total_wait_val,
+            "wait_slack_remaining":     EPS_WAIT - total_wait_val,
+            "wait_weight_in_objective": WAIT_WEIGHT,
+            "|N|":                      len(N),
+            "|Nw|":                     len(Nw),
+            "|K|":                      len(K),
+            "|R|":                      len(R),
+            "|P|":                      len(P),
+            "KxR":                      len(K) * len(R),
+            "U_(|Nw|)":                 U,
+            "BIG_M_TIME":               BIG_M_TIME,
+            "BIG_M_PRECEDENCE":         BIG_M_PRECEDENCE,
+            "BIG_M_WAIT":               BIG_M_WAIT,
+            "BIG_M_LOAD_LB":            BIG_M_LOAD_LB,
+            "BIG_M_LOAD_UB":            BIG_M_LOAD_UB,
         }])
-        write_df(writer, df_opt, 'optimization_results')
+        df_opt.to_excel(writer, sheet_name="optimization_results", index=False)
 
+        # Sheet 2: x_ijkr
         df_x = pd.DataFrame([
-            {
-                'var': 'x',
-                'i': i,
-                'j': j,
-                'k': k,
-                'r': r,
-                'val': int(x[i, j, k, r].X)
-            }
-            for i in N
-            for j in N
-            for k in K
-            for r in R
+            {"var": "x", "i": i, "j": j, "k": k, "r": r, "val": int(x[i, j, k, r].X)}
+            for i in N for j in N for k in K for r in R
             if i != j and (i, j, k, r) in x and x[i, j, k, r].X > 0.5
         ])
-        write_df(writer, df_x, 'x_ijkr', ['var', 'i', 'j', 'k', 'r', 'val'])
+        df_x.to_excel(writer, sheet_name="x_ijkr", index=False)
 
+        # Sheet 3: f_pkr
         df_f = pd.DataFrame([
-            {
-                'var': 'f',
-                'p': p,
-                'k': k,
-                'r': r,
-                'val': int(f[p, k, r].X)
-            }
-            for p in P
-            for k in K
-            for r in R
+            {"var": "f", "p": p, "k": k, "r": r, "val": int(f[p, k, r].X)}
+            for p in P for k in K for r in R
             if f[p, k, r].X > 0.5
         ])
-        write_df(writer, df_f, 'f_pkr', ['var', 'p', 'k', 'r', 'val'])
+        df_f.to_excel(writer, sheet_name="f_pkr", index=False)
 
+        # Sheet 4: u_jkr
         df_u = pd.DataFrame([
-            {
-                'var': 'u',
-                'j': j,
-                'k': k,
-                'r': r,
-                'u': u[j, k, r].X
-            }
-            for j in Nw
-            for k in K
-            for r in R
+            {"var": "u", "j": j, "k": k, "r": r, "u": u[j, k, r].X}
+            for j in Nw for k in K for r in R
             if u[j, k, r].X > 0.01
         ])
-        write_df(writer, df_u, 'u_jkr', ['var', 'j', 'k', 'r', 'u'])
+        df_u.to_excel(writer, sheet_name="u_jkr", index=False)
 
+        # Sheet 5: z_kr (derived: route used or not)
         df_z = pd.DataFrame([
             {
-                'var': 'z',
-                'k': k,
-                'r': r,
-                'z': int(any(
-                    ('h', j, k, r) in x and x['h', j, k, r].X > 0.5
-                    for j in Nw
-                ))
+                "var": "z", "k": k, "r": r,
+                "z": int(any(("h", j, k, r) in x and x["h", j, k, r].X > 0.5 for j in Nw))
             }
-            for k in K
-            for r in R
+            for k in K for r in R
         ])
-        write_df(writer, df_z, 'z_kr', ['var', 'k', 'r', 'z'])
+        df_z.to_excel(writer, sheet_name="z_kr", index=False)
 
+        # Sheet 6: w_p
         df_w = pd.DataFrame([
-            {
-                'var': 'w',
-                'p': p,
-                'w_val': w[p].X
-            }
+            {"var": "w", "p": p, "w_val": w[p].X}
             for p in P
         ])
-        write_df(writer, df_w, 'w_p', ['var', 'p', 'w_val'])
+        df_w.to_excel(writer, sheet_name="w_p", index=False)
 
+        # Sheet 7: ta (arrival times)
         df_ta = pd.DataFrame([
             {
-                'var': 'ta',
-                'node': j,
-                'k': k,
-                'r': r,
-                'time': ta[j, k, r].X,
-                'stamp': minutes_to_hhmm(ta[j, k, r].X)
+                "var": "ta", "node": j, "k": k, "r": r,
+                "time": ta[j, k, r].X, "stamp": minutes_to_hhmm(ta[j, k, r].X)
             }
-            for j in N
-            for k in K
-            for r in R
+            for j in N for k in K for r in R
         ])
-        write_df(writer, df_ta, 'ta', ['var', 'node', 'k', 'r', 'time', 'stamp'])
+        df_ta.to_excel(writer, sheet_name="ta", index=False)
 
+        # Sheet 8: td (departure times)
         df_td = pd.DataFrame([
             {
-                'var': 'td',
-                'node': j,
-                'k': k,
-                'r': r,
-                'time': td[j, k, r].X,
-                'stamp': minutes_to_hhmm(td[j, k, r].X)
+                "var": "td", "node": j, "k": k, "r": r,
+                "time": td[j, k, r].X, "stamp": minutes_to_hhmm(td[j, k, r].X)
             }
-            for j in N
-            for k in K
-            for r in R
+            for j in N for k in K for r in R
         ])
-        write_df(writer, df_td, 'td', ['var', 'node', 'k', 'r', 'time', 'stamp'])
+        df_td.to_excel(writer, sheet_name="td", index=False)
 
+        # Sheet 9: ts (service start times)
         df_ts = pd.DataFrame([
             {
-                'var': 'ts',
-                'node': j,
-                'k': k,
-                'r': r,
-                'time': ts[j, k, r].X,
-                'stamp': minutes_to_hhmm(ts[j, k, r].X)
+                "var": "ts", "node": j, "k": k, "r": r,
+                "time": ts[j, k, r].X, "stamp": minutes_to_hhmm(ts[j, k, r].X)
             }
-            for j in Nw
-            for k in K
-            for r in R
+            for j in Nw for k in K for r in R
         ])
-        write_df(writer, df_ts, 'ts', ['var', 'node', 'k', 'r', 'time', 'stamp'])
+        df_ts.to_excel(writer, sheet_name="ts", index=False)
 
+        # Sheet 10: y_jkr (vehicle load at node)
         df_y = pd.DataFrame([
-            {
-                'var': 'y',
-                'node': j,
-                'k': k,
-                'r': r,
-                'y_val': y[j, k, r].X
-            }
-            for j in N
-            for k in K
-            for r in R
+            {"var": "y", "node": j, "k": k, "r": r, "y_val": y[j, k, r].X}
+            for j in N for k in K for r in R
             if abs(y[j, k, r].X) > 1e-6
         ])
-        write_df(writer, df_y, 'y_jkr', ['var', 'node', 'k', 'r', 'y_val'])
+        df_y.to_excel(writer, sheet_name="y_jkr", index=False)
 
+        # Sheet 11: delta_jkr (net load change)
         df_delta = pd.DataFrame([
-            {
-                'var': 'delta',
-                'node': j,
-                'k': k,
-                'r': r,
-                'delta_val': delta[j, k, r].X
-            }
-            for j in Nw
-            for k in K
-            for r in R
+            {"var": "delta", "node": j, "k": k, "r": r, "delta_val": delta[j, k, r].X}
+            for j in Nw for k in K for r in R
             if abs(delta[j, k, r].X) > 1e-6
         ])
-        write_df(writer, df_delta, 'delta_jkr', ['var', 'node', 'k', 'r', 'delta_val'])
+        df_delta.to_excel(writer, sheet_name="delta_jkr", index=False)
 
+        # Sheet 12: itinerary (route sequence reconstruction)
         itinerary_list = []
 
         for k in K:
             for r in R:
-                current = 'h'
-                visited = {'h'}
+                current = "h"
+                visited = {"h"}
                 order = 1
 
                 itinerary_list.append({
-                    'k': k,
-                    'r': r,
-                    'order': order,
-                    'node': 'h',
-                    'u': None,
-                    'ta': ta['h', k, r].X,
-                    'ta_stamp': minutes_to_hhmm(ta['h', k, r].X),
-                    'td': td['h', k, r].X,
-                    'td_stamp': minutes_to_hhmm(td['h', k, r].X),
-                    'y_after': y['h', k, r].X,
-                    'route_duration': route_duration_val,
-                    'route_duration_stamp': minutes_to_hhmm(route_duration_val)
+                    "k": k, "r": r, "order": order, "node": "h", "u": None,
+                    "ta":       ta["h", k, r].X,
+                    "ta_stamp": minutes_to_hhmm(ta["h", k, r].X),
+                    "td":       td["h", k, r].X,
+                    "td_stamp": minutes_to_hhmm(td["h", k, r].X),
+                    "y_after":  y["h", k, r].X,
+                    "route_duration":       route_duration_val,
+                    "route_duration_stamp": minutes_to_hhmm(route_duration_val),
                 })
 
                 while True:
                     next_node = next(
-                        (
-                            j for j in N
-                            if j != current
-                            and (current, j, k, r) in x
-                            and x[current, j, k, r].X > 0.5
-                        ),
+                        (j for j in N
+                         if j != current
+                         and (current, j, k, r) in x
+                         and x[current, j, k, r].X > 0.5),
                         None
                     )
 
@@ -779,23 +617,19 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
                     order += 1
 
                     itinerary_list.append({
-                        'k': k,
-                        'r': r,
-                        'order': order,
-                        'node': next_node,
-                        'u': u[next_node, k, r].X if next_node in Nw else None,
-                        'ta': ta[next_node, k, r].X,
-                        'ta_stamp': minutes_to_hhmm(ta[next_node, k, r].X),
-                        'td': td[next_node, k, r].X,
-                        'td_stamp': minutes_to_hhmm(td[next_node, k, r].X),
-                        'y_after': y[next_node, k, r].X if next_node in N else None,
-                        'route_duration': route_duration_val,
-                        'route_duration_stamp': minutes_to_hhmm(route_duration_val)
+                        "k": k, "r": r, "order": order, "node": next_node,
+                        "u":        u[next_node, k, r].X if next_node in Nw else None,
+                        "ta":       ta[next_node, k, r].X,
+                        "ta_stamp": minutes_to_hhmm(ta[next_node, k, r].X),
+                        "td":       td[next_node, k, r].X,
+                        "td_stamp": minutes_to_hhmm(td[next_node, k, r].X),
+                        "y_after":  y[next_node, k, r].X if next_node in N else None,
+                        "route_duration":       route_duration_val,
+                        "route_duration_stamp": minutes_to_hhmm(route_duration_val),
                     })
 
-                    if next_node == 'h':
+                    if next_node == "h":
                         break
-
                     if next_node in visited:
                         break
 
@@ -803,43 +637,48 @@ if m.status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.SUBOPTIMAL) and m.SolCount > 0:
                     current = next_node
 
         df_itinerary = pd.DataFrame(itinerary_list)
-        write_df(
-            writer,
-            df_itinerary,
-            'itinerary',
-            [
-                'k', 'r', 'order', 'node', 'u',
-                'ta', 'ta_stamp', 'td', 'td_stamp',
-                'y_after', 'route_duration', 'route_duration_stamp'
-            ]
-        )
+        df_itinerary.to_excel(writer, sheet_name="itinerary", index=False)
 
-    print(f"✓ Excel output successfully generated with 12 sheets")
-    print(f"  File: {excel_full_path}")
+    log.info("Excel output written | %d sheets | %s", 12, excel_full_path)
+
+
+    master_pareto_path = os.path.join(RESULTS_ROOT, "master_pareto.xlsx")
+
+    new_row = pd.DataFrame([{
+        "run_id":               RUN_ID,
+        "model":                MODEL_NAME,
+        "case":                 CASE_NAME,
+        "max_routes":           MAX_ROUTES,
+        "epsilon_wait":         EPS_WAIT,
+        "route_duration":       route_duration_val,
+        "total_wait":           total_wait_val,
+        "obj_value":            m.objVal,
+        "best_bound":           m.ObjBound,
+        "mip_gap":              m.MIPGap,
+        "runtime":              m.Runtime,
+        "status":               m.status,
+        "n_products":           len(P),
+        "n_vehicles":           len(K),
+        "timestamp":            timestamp,
+    }])
+
+    if os.path.exists(master_pareto_path):
+        existing = pd.read_excel(master_pareto_path)
+        combined = pd.concat([existing, new_row], ignore_index=True)
+    else:
+        combined = new_row
+
+    combined.to_excel(master_pareto_path, index=False)
+    log.info("Master Pareto updated | %d total rows | %s", len(combined), master_pareto_path)
 
 elif m.status == GRB.INFEASIBLE:
-    print("\n" + "=" * 80)
-    print("MODEL IS INFEASIBLE")
-    print("=" * 80)
-
+    log.error("Model is INFEASIBLE — computing IIS")
     m.computeIIS()
-    iis_file = os.path.join(OUTPUT_DIR, f"infeasible_route_duration_primary_{timestamp}.ilp")
+    iis_file = os.path.join(OUTPUT_DIR, f"infeasible_{RUN_ID}_{timestamp}.ilp")
     m.write(iis_file)
-
-    print(f"IIS file: {iis_file}")
+    log.error("IIS written | %s", iis_file)
 
 else:
-    print(f"\nNo solution found. Status = {m.status}")
+    log.warning("No solution found | status=%d", m.status)
 
-print("\n" + "=" * 80)
-print("PROGRAM COMPLETE")
-print(f"Terminal output: {terminal_log_path}")
-print("=" * 80)
-
-sys.stdout = original_stdout
-terminal_log_file.close()
-
-try:
-    os.system(f'explorer /select,"{excel_full_path}"')
-except Exception:
-    pass
+log.info("Run complete | run_id=%s", RUN_ID)
