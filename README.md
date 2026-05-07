@@ -65,9 +65,9 @@ internal-logistics-model2/
 **Three canonical test cases (locked and verified):**
 | Case | Structure | f₁ | f₂ |
 |------|-----------|----|----|
-| Case 1 | All-distinct nodes — baseline | 60 | 136 |
-| Case 2 | LOC-C karma nodes — consolidation | 49 | 97 |
-| Case 3 | Shared pickup, RT-max stress test | 58 | 120 |
+| Case 1 | All-distinct nodes — baseline | 77 | 91 |
+| Case 2 | LOC-C karma nodes — consolidation | 67 | 85 |
+| Case 3 | Shared pickup, RT-max stress test | 85 | 130 |
 
 ---
 
