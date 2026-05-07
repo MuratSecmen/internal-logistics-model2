@@ -1,0 +1,46 @@
+\ Model SR_SV_RD_case3_P5_eps85_copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+\ Signature: 0xc96ec7d8c4ea40d7
+Minimize
+ 
+Subject To
+ c3_epsilon_wait: w[P1] + w[P2] + w[P3] + w[P4] + w[P5] <= 85
+ c10[P1]: f[P1,V1,1] = 1
+ c10[P2]: f[P2,V1,1] = 1
+ c10[P3]: f[P3,V1,1] = 1
+ c10[P4]: f[P4,V1,1] = 1
+ c10[P5]: f[P5,V1,1] = 1
+ c19[N1,V1,1]: - 2 f[P1,V1,1] - 2 f[P2,V1,1] + td[N1,V1,1] - ts[N1,V1,1]
+   >= 0
+ c19[N5,V1,1]: - 2 f[P3,V1,1] - 2 f[P4,V1,1] - 2 f[P5,V1,1] + td[N5,V1,1]
+   - ts[N5,V1,1] >= 0
+ c18[P2,V1,1]: - 40 f[P2,V1,1] + ts[N1,V1,1] >= 0
+ c18[P5,V1,1]: - 60 f[P5,V1,1] + ts[N5,V1,1] >= 0
+ c20[P1,V1,1]: - 480 f[P1,V1,1] + ta[N2,V1,1] - td[N1,V1,1] >= -480
+ c20[P2,V1,1]: - 480 f[P2,V1,1] + ta[N3,V1,1] - td[N1,V1,1] >= -480
+ c20[P3,V1,1]: - 480 f[P3,V1,1] + ta[N6,V1,1] - td[N5,V1,1] >= -480
+ c20[P4,V1,1]: - 480 f[P4,V1,1] + ta[N7,V1,1] - td[N5,V1,1] >= -480
+ c20[P5,V1,1]: - 480 f[P5,V1,1] + ta[N8,V1,1] - td[N5,V1,1] >= -480
+ c22[P1,V1,1]: - 465 f[P1,V1,1] + w[P1] - ta[N2,V1,1] >= -484
+ c22[P2,V1,1]: - 465 f[P2,V1,1] + w[P2] - ta[N3,V1,1] >= -504
+ c22[P3,V1,1]: - 465 f[P3,V1,1] + w[P3] - ta[N6,V1,1] >= -494
+ c22[P4,V1,1]: - 465 f[P4,V1,1] + w[P4] - ta[N7,V1,1] >= -519
+ c22[P5,V1,1]: - 465 f[P5,V1,1] + w[P5] - ta[N8,V1,1] >= -524
+Bounds
+ w[P1] free
+ w[P2] free
+ w[P3] free
+ w[P4] free
+ w[P5] free
+ ta[N2,V1,1] free
+ ta[N3,V1,1] free
+ ta[N6,V1,1] free
+ ta[N7,V1,1] free
+ ta[N8,V1,1] free
+ td[N1,V1,1] free
+ td[N5,V1,1] free
+ ts[N1,V1,1] free
+ ts[N5,V1,1] free
+Binaries
+ f[P1,V1,1] f[P2,V1,1] f[P3,V1,1] f[P4,V1,1] f[P5,V1,1]
+End

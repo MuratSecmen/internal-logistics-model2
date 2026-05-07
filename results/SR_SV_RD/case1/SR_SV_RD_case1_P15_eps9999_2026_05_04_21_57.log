@@ -1,0 +1,91 @@
+21:57:17 | INFO    | Run started | run_id: SR_SV_RD_case1_P15_eps9999 | log file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case1\SR_SV_RD_case1_P15_eps9999_2026_05_04_21_57.log
+21:57:17 | INFO    | Products loaded | sheet=case1 | rows=15
+21:57:17 | INFO    | Data loaded | |N|=31 |Nw|=30 |K|=1 |R|=1 |P|=15 | U=30
+21:57:17 | INFO    | Big-M | time=491.0 precedence=480.0 wait=465.0 load_lb=20 load_ub=20
+21:57:17 | INFO    | Set parameter Username
+21:57:17 | INFO    | Set parameter LicenseID to value 2811848
+21:57:17 | INFO    | Academic license - for non-commercial use only - expires 2027-04-22
+21:57:17 | INFO    | Objective set | primary: min route_duration | tie-break weight on wait: 0.001
+21:57:17 | INFO    | Constraint (3) added | total_wait <= 9999
+21:57:17 | INFO    | Constraints (4)-(9) added | route structure
+21:57:17 | INFO    | Constraints (10)-(12) added | product assignment
+21:57:17 | INFO    | Constraints (13)-(15) added | route timing
+21:57:17 | INFO    | Constraints (16) added | time consistency
+21:57:17 | INFO    | Constraints (17)-(19) added | service times
+21:57:17 | INFO    | Constraints (20)-(22) added | precedence, route closure, waiting
+21:57:17 | INFO    | Constraints (23)-(27) added | load propagation
+21:57:17 | INFO    | Constraints (28)-(32) added | MTZ and route ordering
+21:57:17 | INFO    | Set parameter TimeLimit to value 600
+21:57:17 | INFO    | Set parameter MIPGap to value 0.01
+21:57:17 | INFO    | Set parameter Presolve to value 2
+21:57:17 | INFO    | Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case1\result_SR_SV_RD_case1_P15_eps9999_2026_05_04_21_57.log"
+21:57:17 | INFO    | Solver configured | TimeLimit=600s | MIPGap=0.01 | gurobi_log=C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case1\result_SR_SV_RD_case1_P15_eps9999_2026_05_04_21_57.log
+21:57:17 | INFO    | Optimization starting...
+21:57:17 | INFO    | Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+21:57:17 | INFO    | 
+21:57:17 | INFO    | CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+21:57:17 | INFO    | Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+21:57:17 | INFO    | 
+21:57:17 | INFO    | Non-default parameters:
+21:57:17 | INFO    | TimeLimit  600
+21:57:17 | INFO    | MIPGap  0.01
+21:57:17 | INFO    | Presolve  2
+21:57:17 | INFO    | 
+21:57:17 | INFO    | Optimize a model with 3922 rows, 1143 columns and 20254 nonzeros
+21:57:17 | INFO    | Model fingerprint: 0x8cdb9426
+21:57:17 | INFO    | Variable types: 168 continuous, 975 integer (945 binary)
+21:57:17 | INFO    | Coefficient statistics:
+21:57:17 | INFO    |   Matrix range     [1e+00, 5e+02]
+21:57:17 | INFO    |   Objective range  [1e-03, 1e+00]
+21:57:17 | INFO    |   Bounds range     [1e+00, 3e+01]
+21:57:17 | INFO    |   RHS range        [1e+00, 1e+04]
+21:57:17 | INFO    | Presolve removed 488 rows and 154 columns
+21:57:17 | INFO    | Presolve time: 0.07s
+21:57:17 | INFO    | Presolved: 3434 rows, 989 columns, 32430 nonzeros
+21:57:17 | INFO    | Variable types: 90 continuous, 899 integer (869 binary)
+21:57:17 | INFO    | Root relaxation presolve removed 24 rows and 0 columns
+21:57:17 | INFO    | Root relaxation presolved: 3410 rows, 1012 columns, 32378 nonzeros
+21:57:17 | INFO    | 
+21:57:17 | INFO    | 
+21:57:17 | INFO    | Root relaxation: objective 4.500000e-02, 398 iterations, 0.04 seconds (0.06 work units)
+21:57:18 | INFO    | 
+21:57:18 | INFO    |     Nodes    |    Current Node    |     Objective Bounds      |     Work
+21:57:18 | INFO    |  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+21:57:18 | INFO    | 
+21:57:18 | INFO    |      0     0    0.04500    0   51          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   87          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   86          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   52          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   70          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   56          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   84          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   49          -    0.04500      -     -    0s
+21:57:18 | INFO    |      0     0    0.04500    0   49          -    0.04500      -     -    0s
+21:57:19 | INFO    |      0     2    0.04500    0   42          -    0.04500      -     -    1s
+21:57:22 | INFO    |   4129  3859    0.12785   64  129          -    0.12785      -  28.3    5s
+21:57:27 | INFO    |   4181  3895    0.13781   67  138          -    0.13781      -  34.7   10s
+21:57:32 | INFO    |   4230  3929    0.13948  130  170          -    0.13948      -  38.2   15s
+21:57:39 | INFO    |   4272  3963    0.13982   50  143          -    0.13982      -  15.7   21s
+21:57:42 | INFO    |   5563  4919    0.16359  114   95          -    0.13982      -  52.0   25s
+21:57:48 | INFO    |  11183  8283    0.24869  297   66          -    0.13997      -  64.8   30s
+21:57:53 | INFO    |  17825 12634    0.38540  231   62          -    0.13997      -  64.3   35s
+21:57:55 | INFO    | 
+21:57:55 | INFO    | Cutting planes:
+21:57:55 | INFO    |   Learned: 1
+21:57:55 | INFO    |   Gomory: 3
+21:57:55 | INFO    |   Cover: 1
+21:57:55 | INFO    |   Implied bound: 16
+21:57:55 | INFO    |   Projected implied bound: 3
+21:57:55 | INFO    |   MIR: 58
+21:57:55 | INFO    |   Flow cover: 75
+21:57:55 | INFO    |   Relax-and-lift: 18
+21:57:55 | INFO    | 
+21:57:55 | INFO    | Explored 23164 nodes (1602495 simplex iterations) in 37.91 seconds (70.97 work units)
+21:57:55 | INFO    | Thread count was 16 (of 16 available processors)
+21:57:55 | INFO    | 
+21:57:55 | INFO    | Solution count 0
+21:57:55 | INFO    | 
+21:57:55 | INFO    | Solve interrupted
+21:57:55 | INFO    | Best objective -, best bound 1.402496710660e-01, gap -
+21:57:55 | WARNING | No solution found | status=11
+21:57:55 | INFO    | Run complete | run_id=SR_SV_RD_case1_P15_eps9999

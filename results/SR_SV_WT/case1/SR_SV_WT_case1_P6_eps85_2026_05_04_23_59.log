@@ -1,0 +1,236 @@
+23:59:01 | INFO    | Run started | run_id: SR_SV_WT_case1_P6_eps85 | log file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_WT\case1\SR_SV_WT_case1_P6_eps85_2026_05_04_23_59.log
+23:59:01 | INFO    | Products loaded | sheet=case1 | rows=15
+23:59:01 | INFO    | Data loaded | |N|=31 |Nw|=30 |K|=1 |R|=1 |P|=6 | U=30
+23:59:01 | INFO    | Big-M | time=491.0 precedence=480.0 wait=465.0 load_lb=20 load_ub=20
+23:59:01 | INFO    | Set parameter Username
+23:59:01 | INFO    | Set parameter LicenseID to value 2811848
+23:59:01 | INFO    | Academic license - for non-commercial use only - expires 2027-04-22
+23:59:01 | INFO    | Objective set | primary: min total_wait | tie-break weight on route_duration: 0.001
+23:59:01 | INFO    | Constraint (3) added | route_duration <= 85
+23:59:01 | INFO    | Constraints (4)-(9) added | route structure
+23:59:01 | INFO    | Constraints (10)-(12) added | product assignment
+23:59:01 | INFO    | Constraints (13)-(15) added | route timing
+23:59:01 | INFO    | Constraints (16) added | time consistency
+23:59:01 | INFO    | Constraints (17)-(19) added | service times
+23:59:01 | INFO    | Constraints (20)-(22) added | precedence, route closure, waiting
+23:59:01 | INFO    | Constraints (23)-(27) added | load propagation
+23:59:01 | INFO    | Constraints (28)-(32) added | MTZ and route ordering
+23:59:01 | INFO    | Set parameter TimeLimit to value 600
+23:59:01 | INFO    | Set parameter MIPGap to value 0.01
+23:59:01 | INFO    | Set parameter Presolve to value 2
+23:59:01 | INFO    | Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_WT\case1\result_SR_SV_WT_case1_P6_eps85_2026_05_04_23_59.log"
+23:59:01 | INFO    | Solver configured | TimeLimit=600s | MIPGap=0.01 | gurobi_log=C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_WT\case1\result_SR_SV_WT_case1_P6_eps85_2026_05_04_23_59.log
+23:59:01 | INFO    | Optimization starting...
+23:59:01 | INFO    | Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+23:59:01 | INFO    | 
+23:59:01 | INFO    | CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+23:59:01 | INFO    | Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+23:59:01 | INFO    | 
+23:59:01 | INFO    | Non-default parameters:
+23:59:01 | INFO    | TimeLimit  600
+23:59:01 | INFO    | MIPGap  0.01
+23:59:01 | INFO    | Presolve  2
+23:59:01 | INFO    | 
+23:59:01 | INFO    | Optimize a model with 3859 rows, 1125 columns and 19511 nonzeros
+23:59:01 | INFO    | Model fingerprint: 0xcdbfaf95
+23:59:01 | INFO    | Variable types: 159 continuous, 966 integer (936 binary)
+23:59:01 | INFO    | Coefficient statistics:
+23:59:01 | INFO    |   Matrix range     [1e+00, 5e+02]
+23:59:01 | INFO    |   Objective range  [1e-03, 1e+00]
+23:59:01 | INFO    |   Bounds range     [1e+00, 3e+01]
+23:59:01 | INFO    |   RHS range        [1e+00, 5e+02]
+23:59:01 | INFO    | Presolve removed 3287 rows and 925 columns
+23:59:01 | INFO    | Presolve time: 0.01s
+23:59:01 | INFO    | Presolved: 572 rows, 200 columns, 3296 nonzeros
+23:59:01 | INFO    | Variable types: 38 continuous, 162 integer (150 binary)
+23:59:01 | INFO    | Root relaxation presolve removed 2 rows and 0 columns
+23:59:01 | INFO    | Root relaxation presolved: 570 rows, 201 columns, 3282 nonzeros
+23:59:01 | INFO    | 
+23:59:01 | INFO    | 
+23:59:01 | INFO    | Root relaxation: objective 1.800000e+01, 83 iterations, 0.01 seconds (0.00 work units)
+23:59:01 | INFO    | 
+23:59:01 | INFO    |     Nodes    |    Current Node    |     Objective Bounds      |     Work
+23:59:01 | INFO    |  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+23:59:01 | INFO    | 
+23:59:01 | INFO    |      0     0   18.00000    0   24          -   18.00000      -     -    0s
+23:59:01 | INFO    |      0     0   18.00000    0   32          -   18.00000      -     -    0s
+23:59:01 | INFO    |      0     0   18.00000    0   32          -   18.00000      -     -    0s
+23:59:01 | INFO    |      0     0   18.00000    0   32          -   18.00000      -     -    0s
+23:59:01 | INFO    |      0     0   18.00000    0   37          -   18.00000      -     -    0s
+23:59:01 | INFO    |      0     0   18.05600    0   29          -   18.05600      -     -    0s
+23:59:01 | INFO    |      0     0   18.08345    0   33          -   18.08345      -     -    0s
+23:59:01 | INFO    |      0     0   28.34173    0   41          -   28.34173      -     -    0s
+23:59:01 | INFO    |      0     0   30.78965    0   45          -   30.78965      -     -    0s
+23:59:01 | INFO    |      0     0   30.97022    0   46          -   30.97022      -     -    0s
+23:59:01 | INFO    |      0     0   30.97022    0   48          -   30.97022      -     -    0s
+23:59:01 | INFO    |      0     0   35.41079    0   48          -   35.41079      -     -    0s
+23:59:01 | INFO    |      0     0   35.87239    0   49          -   35.87239      -     -    0s
+23:59:01 | INFO    |      0     0   35.99429    0   50          -   35.99429      -     -    0s
+23:59:01 | INFO    |      0     0   36.09645    0   48          -   36.09645      -     -    0s
+23:59:01 | INFO    |      0     0   36.11038    0   47          -   36.11038      -     -    0s
+23:59:01 | INFO    |      0     0   36.11261    0   49          -   36.11261      -     -    0s
+23:59:01 | INFO    |      0     0   36.80044    0   45          -   36.80044      -     -    0s
+23:59:01 | INFO    |      0     0   36.82582    0   49          -   36.82582      -     -    0s
+23:59:01 | INFO    |      0     0   36.82582    0   49          -   36.82582      -     -    0s
+23:59:01 | INFO    |      0     0   37.21240    0   52          -   37.21240      -     -    0s
+23:59:01 | INFO    |      0     0   37.22626    0   56          -   37.22626      -     -    0s
+23:59:01 | INFO    |      0     0   37.22646    0   56          -   37.22646      -     -    0s
+23:59:01 | INFO    |      0     0   37.27361    0   58          -   37.27361      -     -    0s
+23:59:01 | INFO    |      0     0   37.33993    0   57          -   37.33993      -     -    0s
+23:59:01 | INFO    |      0     0   37.35235    0   55          -   37.35235      -     -    0s
+23:59:01 | INFO    |      0     0   37.35248    0   57          -   37.35248      -     -    0s
+23:59:01 | INFO    |      0     0   37.37726    0   54          -   37.37726      -     -    0s
+23:59:01 | INFO    |      0     0   37.42989    0   54          -   37.42989      -     -    0s
+23:59:01 | INFO    |      0     0   37.42989    0   56          -   37.42989      -     -    0s
+23:59:01 | INFO    |      0     0   37.42989    0   56          -   37.42989      -     -    0s
+23:59:01 | INFO    |      0     0   37.46725    0   56          -   37.46725      -     -    0s
+23:59:01 | INFO    |      0     0   37.46725    0   56          -   37.46725      -     -    0s
+23:59:01 | INFO    |      0     0   37.46725    0   52          -   37.46725      -     -    0s
+23:59:01 | INFO    |      0     2   37.52806    0   50          -   37.52806      -     -    0s
+23:59:06 | INFO    |  42614 23881   85.09051   24   63          -   53.85816      -  16.8    5s
+23:59:11 | INFO    |  72613 31642 infeasible   70               -   57.46990      -  18.8   10s
+23:59:16 | INFO    |  152921 58224  119.63608   62   12          -   64.05861      -  19.3   15s
+23:59:21 | INFO    |  229744 86530 infeasible   68               -   67.71691      -  19.9   20s
+23:59:26 | INFO    |  331523 128706   73.19409   54   21          -   71.05317      -  19.2   25s
+23:59:31 | INFO    |  405724 154991 infeasible   77               -   73.03009      -  19.2   30s
+23:59:36 | INFO    |  485171 183278 infeasible   53               -   74.87100      -  19.3   35s
+23:59:41 | INFO    |  555346 206727  110.36734   63   24          -   76.32334      -  19.5   40s
+23:59:46 | INFO    |  620292 227648  115.98708   78   35          -   77.71916      -  19.9   45s
+23:59:51 | INFO    |  676877 242966 infeasible   59               -   78.94334      -  20.4   50s
+23:59:56 | INFO    |  745135 261713 infeasible   63               -   80.21302      -  20.8   55s
+00:00:01 | INFO    |  805862 277667  102.19480   57   15          -   81.36083      -  21.2   60s
+00:00:06 | INFO    |  849117 287216   99.84050   67   27          -   82.24468      -  21.7   65s
+00:00:11 | INFO    |  911186 303800   99.95262   71   18          -   83.27437      -  22.0   70s
+00:00:16 | INFO    |  966813 315131   99.36905   66   25          -   84.22915      -  22.3   75s
+00:00:21 | INFO    |  1015495 326103  148.51486   59   20          -   85.06100      -  22.6   80s
+00:00:26 | INFO    |  1077540 340605  117.57803   57   20          -   86.00452      -  22.8   85s
+00:00:31 | INFO    |  1120898 349980   88.32282   55   19          -   86.67332      -  23.1   90s
+00:00:36 | INFO    |  1174621 360392 infeasible   66               -   87.38137      -  23.3   95s
+00:00:41 | INFO    |  1223345 369431 infeasible   73               -   88.14019      -  23.6  100s
+00:00:46 | INFO    |  1271790 377821   92.74869   58   26          -   88.99030      -  23.9  105s
+00:00:51 | INFO    |  1313067 384458 infeasible   78               -   89.47861      -  24.1  110s
+00:00:56 | INFO    |  1370951 397220  142.14805   64   23          -   90.18244      -  24.1  115s
+00:01:01 | INFO    |  1428861 409842 infeasible   68               -   91.00000      -  24.0  120s
+00:01:06 | INFO    |  1476158 419379 infeasible   59               -   91.47745      -  24.0  125s
+00:01:11 | INFO    |  1528211 431533 infeasible   58               -   92.06201      -  24.0  130s
+00:01:16 | INFO    |  1586586 444385  124.08892   77   11          -   92.78231      -  24.0  135s
+00:01:21 | INFO    |  1640472 454304 infeasible   90               -   93.32573      -  23.9  140s
+00:01:26 | INFO    |  1682221 461884 infeasible   67               -   93.92593      -  24.0  145s
+00:01:31 | INFO    |  1739025 472791  114.28140   69   21          -   94.51819      -  24.0  150s
+00:01:36 | INFO    |  1792285 483396  126.42576   54   19          -   95.07886      -  23.9  155s
+00:01:41 | INFO    |  1828865 490781  132.45674   62   29          -   95.56934      -  24.0  160s
+00:01:46 | INFO    |  1881091 498392 infeasible   87               -   96.13283      -  24.0  165s
+00:01:51 | INFO    |  1932680 508252  175.53420   68   24          -   96.76897      -  24.0  170s
+00:01:56 | INFO    |  1969917 513780  143.12104   53   33          -   97.09083      -  24.1  175s
+00:02:01 | INFO    |  2018068 520042  118.35051   79   26          -   97.60169      -  24.1  180s
+00:02:06 | INFO    |  2059899 527263 infeasible   65               -   98.06907      -  24.1  185s
+00:02:11 | INFO    |  2098146 532515 infeasible   78               -   98.47825      -  24.1  190s
+00:02:16 | INFO    |  2143532 541105  125.22653   54   29          -   99.05600      -  24.2  195s
+00:02:21 | INFO    |  2181706 544295 infeasible   67               -   99.43606      -  24.2  200s
+00:02:26 | INFO    |  2228145 551461  127.19827   70   29          -  100.00125      -  24.2  205s
+00:02:31 | INFO    |  2254288 556057  107.62811   66   17          -  100.22578      -  24.3  210s
+00:02:36 | INFO    |  2305923 562128  156.68066   72   15          -  100.83344      -  24.3  215s
+00:02:41 | INFO    |  2328251 563300 infeasible   47               -  101.04200      -  24.4  220s
+00:02:46 | INFO    |  2367126 570876  104.56219   66   16          -  101.37191      -  24.4  225s
+00:02:51 | INFO    |  2398285 571018  125.74982   59   28          -  101.87817      -  24.5  230s
+00:02:56 | INFO    |  2438035 575659  102.30620   65   24          -  102.21307      -  24.5  235s
+00:03:01 | INFO    |  2474612 579825 infeasible   55               -  102.67317      -  24.5  240s
+00:03:06 | INFO    |  2508276 581754 infeasible   72               -  103.08476      -  24.6  245s
+00:03:11 | INFO    |  2544342 585704 infeasible   65               -  103.46114      -  24.7  250s
+00:03:16 | INFO    |  2580506 589145 infeasible   59               -  104.00000      -  24.7  255s
+00:03:21 | INFO    |  2611846 591308 infeasible   72               -  104.24294      -  24.8  260s
+00:03:26 | INFO    |  2651595 594738 infeasible   63               -  104.77646      -  24.8  265s
+00:03:32 | INFO    |  2682190 598525  149.56693   62   16          -  105.09473      -  24.9  270s
+00:03:36 | INFO    |  2717758 600795  118.83377   65   27          -  105.49633      -  24.9  275s
+00:03:41 | INFO    |  2745858 599312 infeasible   69               -  105.99090      -  25.0  280s
+00:03:46 | INFO    |  2786614 602607 infeasible   63               -  106.30650      -  25.1  285s
+00:03:51 | INFO    |  2810321 600960 infeasible   87               -  106.76024      -  25.2  290s
+00:03:56 | INFO    |  2841205 601729 infeasible   69               -  107.11983      -  25.3  295s
+00:04:01 | INFO    |  2875096 601879  108.54396   65   30          -  107.59407      -  25.3  300s
+00:04:06 | INFO    |  2900152 602314  126.56386   89   26          -  108.04367      -  25.5  305s
+00:04:11 | INFO    |  2930666 600023 infeasible   60               -  108.39161      -  25.6  310s
+00:04:16 | INFO    |  2962058 599230 infeasible   68               -  108.94370      -  25.6  315s
+00:04:21 | INFO    |  2986271 597435 infeasible   71               -  109.21945      -  25.8  320s
+00:04:26 | INFO    |  3009479 594642 infeasible   61               -  109.68229      -  25.9  325s
+00:04:31 | INFO    |  3043737 594845 infeasible   78               -  110.10545      -  25.9  330s
+00:04:36 | INFO    |  3065625 592084 infeasible   54               -  110.50328      -  26.0  335s
+00:04:41 | INFO    |  3093692 588930  127.05200   46    9          -  111.05020      -  26.2  340s
+00:04:46 | INFO    |  3116959 586063 infeasible   61               -  111.40405      -  26.3  345s
+00:04:51 | INFO    |  3148196 584948  169.00714   50   16          -  112.00000      -  26.3  350s
+00:04:56 | INFO    |  3171469 582204 infeasible   53               -  112.27422      -  26.4  355s
+00:05:01 | INFO    |  3199389 578507 infeasible   59               -  112.90756      -  26.6  360s
+00:05:06 | INFO    |  3222599 575532  137.89707   71   23          -  113.20247      -  26.7  365s
+00:05:11 | INFO    |  3248997 571512 infeasible   69               -  113.81517      -  26.8  370s
+00:05:16 | INFO    |  3272767 568829  120.51849   60   30          -  114.13258      -  26.9  375s
+00:05:22 | INFO    |  3298987 565211 infeasible   65               -  114.68942      -  27.0  380s
+00:05:26 | INFO    |  3320694 561788 infeasible   55               -  115.07321      -  27.1  385s
+00:05:31 | INFO    |  3343915 558061  140.22776   72   22          -  115.53685      -  27.1  390s
+00:05:36 | INFO    |  3369804 554897 infeasible   55               -  116.05051      -  27.2  395s
+00:05:42 | INFO    |  3396447 550906 infeasible   64               -  116.52640      -  27.3  400s
+00:05:46 | INFO    |  3419805 547205 infeasible   85               -  117.04562      -  27.4  405s
+00:05:51 | INFO    |  3444645 542935 infeasible   64               -  117.47268      -  27.5  410s
+00:05:56 | INFO    |  3461256 540106  118.38368   70   37          -  117.92337      -  27.6  415s
+00:06:02 | INFO    |  3471114 539099  178.24989   75   19          -  118.03753      -  27.6  420s
+00:06:07 | INFO    |  3481241 537276 infeasible   65               -  118.17709      -  27.6  425s
+00:06:12 | INFO    |  3487728 536015  135.47806   70   22          -  118.31797      -  27.7  430s
+00:06:17 | INFO    |  3497797 534080  133.37463   70   20          -  118.57240      -  27.7  435s
+00:06:21 | INFO    |  3506194 532450 infeasible   61               -  118.80680      -  27.7  440s
+00:06:27 | INFO    |  3516682 531207  119.97490   73   21          -  119.00414      -  27.8  445s
+00:06:31 | INFO    |  3524800 530065  119.12739   60   32          -  119.07143      -  27.8  450s
+00:06:37 | INFO    |  3534577 528704 infeasible   75               -  119.24048      -  27.8  455s
+00:06:41 | INFO    |  3541625 527265 infeasible   72               -  119.40000      -  27.9  460s
+00:06:47 | INFO    |  3551467 525299 infeasible   61               -  119.66499      -  27.9  465s
+00:06:52 | INFO    |  3561249 523438 infeasible   65               -  119.94793      -  27.9  470s
+00:06:56 | INFO    |  3569421 522412 infeasible   70               -  120.04236      -  28.0  475s
+00:07:01 | INFO    |  3576154 520942  131.18260   61   25          -  120.10776      -  28.0  480s
+00:07:07 | INFO    |  3586519 519045 infeasible   74               -  120.30853      -  28.0  485s
+00:07:12 | INFO    |  3596574 517027  140.48663   62   29          -  120.56581      -  28.1  490s
+00:07:16 | INFO    |  3604926 515350 infeasible   76               -  120.81136      -  28.1  495s
+00:07:22 | INFO    |  3614782 514062  197.47192   60   24          -  121.01417      -  28.1  501s
+00:07:27 | INFO    |  3621652 512581  141.52287   57   17          -  121.08100      -  28.1  505s
+00:07:31 | INFO    |  3630135 511006 infeasible   66               -  121.22623      -  28.2  510s
+00:07:37 | INFO    |  3639871 508901 infeasible   89               -  121.46706      -  28.2  515s
+00:07:42 | INFO    |  3649858 506671  132.26996   65   31          -  121.77707      -  28.2  520s
+00:07:46 | INFO    |  3658028 505290 infeasible   62               -  122.00000      -  28.3  525s
+00:07:52 | INFO    |  3664705 504486 infeasible   63               -  122.05199      -  28.3  530s
+00:07:57 | INFO    |  3674763 502440  122.23700   76   12          -  122.19096      -  28.3  535s
+00:08:01 | INFO    |  3682992 500473 infeasible   58               -  122.40374      -  28.3  540s
+00:08:06 | INFO    |  3692773 498220  152.77061   79   15          -  122.69186      -  28.4  545s
+00:08:12 | INFO    |  3702646 496201 infeasible   71               -  122.99072      -  28.4  550s
+00:08:17 | INFO    |  3710450 495466 infeasible   78               -  123.05272      -  28.4  555s
+00:08:22 | INFO    |  3718283 493522 infeasible   66               -  123.17315      -  28.5  560s
+00:08:26 | INFO    |  3726975 491513  180.39650   64    4          -  123.37975      -  28.5  565s
+00:08:32 | INFO    |  3736994 489161  209.47865   69   15          -  123.68393      -  28.5  570s
+00:08:37 | INFO    |  3745483 487618 infeasible   66               -  123.96360      -  28.5  575s
+00:08:42 | INFO    |  3752217 486375 infeasible   66               -  124.03344      -  28.6  580s
+00:08:47 | INFO    |  3762321 484251 infeasible   66               -  124.18718      -  28.6  585s
+00:08:51 | INFO    |  3770705 482399 infeasible   86               -  124.40760      -  28.6  590s
+00:08:57 | INFO    |  3780451 479936 infeasible   67               -  124.71429      -  28.7  595s
+00:09:01 | INFO    |  3788878 478189 infeasible   59               -  124.99651      -  28.7  600s
+00:09:01 | INFO    | 
+00:09:01 | INFO    | Cutting planes:
+00:09:01 | INFO    |   Learned: 4
+00:09:01 | INFO    |   Gomory: 4
+00:09:01 | INFO    |   Cover: 1
+00:09:01 | INFO    |   Implied bound: 63
+00:09:01 | INFO    |   Projected implied bound: 7
+00:09:01 | INFO    |   Clique: 1
+00:09:01 | INFO    |   MIR: 100
+00:09:01 | INFO    |   Mixing: 23
+00:09:01 | INFO    |   StrongCG: 2
+00:09:01 | INFO    |   Flow cover: 626
+00:09:01 | INFO    |   Inf proof: 1
+00:09:01 | INFO    |   Zero half: 2
+00:09:01 | INFO    |   RLT: 31
+00:09:01 | INFO    |   Relax-and-lift: 28
+00:09:01 | INFO    |   PSD: 11
+00:09:01 | INFO    | 
+00:09:01 | INFO    | Explored 3790242 nodes (108747972 simplex iterations) in 600.03 seconds (480.09 work units)
+00:09:01 | INFO    | Thread count was 16 (of 16 available processors)
+00:09:01 | INFO    | 
+00:09:01 | INFO    | Solution count 0
+00:09:01 | INFO    | 
+00:09:01 | INFO    | Time limit reached
+00:09:01 | INFO    | Best objective -, best bound 1.250000000000e+02, gap -
+00:09:01 | WARNING | No solution found | status=9
+00:09:01 | INFO    | Run complete | run_id=SR_SV_WT_case1_P6_eps85

@@ -1,0 +1,78 @@
+
+Gurobi 12.0.0 (win64) logging started Wed May  6 19:23:06 2026
+
+Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case3\result_SR_SV_RD_case3_P5_eps129_2026_05_06_19_23.log"
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+Optimize a model with 3852 rows, 1123 columns and 19434 nonzeros
+Model fingerprint: 0xdd3d56d1
+Variable types: 158 continuous, 965 integer (935 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 5e+02]
+  Objective range  [1e-03, 1e+00]
+  Bounds range     [1e+00, 3e+01]
+  RHS range        [1e+00, 5e+02]
+Presolve removed 3720 rows and 1072 columns
+Presolve time: 0.01s
+Presolved: 132 rows, 51 columns, 602 nonzeros
+Variable types: 20 continuous, 31 integer (25 binary)
+Root relaxation presolve removed 1 rows and 0 columns
+Root relaxation presolved: 131 rows, 51 columns, 598 nonzeros
+
+
+Root relaxation: objective 3.939186e+01, 28 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0   39.39186    0   14          -   39.39186      -     -    0s
+     0     0   62.57202    0   15          -   62.57202      -     -    0s
+     0     0   66.13122    0   15          -   66.13122      -     -    0s
+     0     0 1.000e+100    0   19          - infeasible      -     -    0s
+
+Cutting planes:
+  Learned: 1
+  Gomory: 5
+  Cover: 3
+  Implied bound: 10
+  MIR: 29
+  RLT: 2
+  Relax-and-lift: 1
+
+Explored 1 nodes (80 simplex iterations) in 0.03 seconds (0.02 work units)
+Thread count was 16 (of 16 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+
+CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+
+Non-default parameters:
+TimeLimit  600
+MIPGap  0.01
+Presolve  2
+
+
+Computing Irreducible Inconsistent Subsystem (IIS)...
+
+           Constraints          |            Bounds           |  Runtime
+      Min       Max     Guess   |   Min       Max     Guess   |
+--------------------------------------------------------------------------
+        0      3852         -         0       188         -           0s
+       73      2779       126         0       174         -           5s
+       90      2121         -         0       168         -           7s
+
+Non-minimal IIS computed: 2121 constraints, 168 bounds
+IIS runtime: 6.88 seconds (7.77 work units)

@@ -1,0 +1,116 @@
+19:20:30 | INFO    | Run started | run_id: SR_SV_RD_case2_P5_eps9999 | log file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\SR_SV_RD_case2_P5_eps9999_2026_05_06_19_20.log
+19:20:30 | INFO    | Products loaded | sheet=case2 | rows=15
+19:20:30 | INFO    | Data loaded | |N|=31 |Nw|=30 |K|=1 |R|=1 |P|=5 | U=30
+19:20:30 | INFO    | Big-M | time=491.0 precedence=480.0 wait=465.0 load_lb=20 load_ub=20
+19:20:30 | INFO    | Set parameter Username
+19:20:30 | INFO    | Set parameter LicenseID to value 2811848
+19:20:30 | INFO    | Academic license - for non-commercial use only - expires 2027-04-22
+19:20:30 | INFO    | Objective set | primary: min route_duration | tie-break weight on wait: 0.001
+19:20:30 | INFO    | Constraint (3) added | total_wait <= 9999
+19:20:30 | INFO    | Constraints (4)-(9) added | route structure
+19:20:30 | INFO    | Constraints (10)-(12) added | product assignment
+19:20:30 | INFO    | Constraints (13)-(15) added | route timing
+19:20:30 | INFO    | Constraints (16) added | time consistency
+19:20:30 | INFO    | Constraints (17)-(19) added | service times
+19:20:30 | INFO    | Constraints (20)-(22) added | precedence, route closure, waiting
+19:20:30 | INFO    | Constraints (23)-(27) added | load propagation
+19:20:30 | INFO    | Constraints (28)-(32) added | MTZ and route ordering
+19:20:30 | INFO    | Set parameter TimeLimit to value 600
+19:20:30 | INFO    | Set parameter MIPGap to value 0.01
+19:20:30 | INFO    | Set parameter Presolve to value 2
+19:20:30 | INFO    | Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\result_SR_SV_RD_case2_P5_eps9999_2026_05_06_19_20.log"
+19:20:30 | INFO    | Solver configured | TimeLimit=600s | MIPGap=0.01 | gurobi_log=C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\result_SR_SV_RD_case2_P5_eps9999_2026_05_06_19_20.log
+19:20:30 | INFO    | Optimization starting...
+19:20:30 | INFO    | Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+19:20:30 | INFO    | 
+19:20:30 | INFO    | CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+19:20:30 | INFO    | Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Non-default parameters:
+19:20:30 | INFO    | TimeLimit  600
+19:20:30 | INFO    | MIPGap  0.01
+19:20:30 | INFO    | Presolve  2
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Optimize a model with 3852 rows, 1123 columns and 19434 nonzeros
+19:20:30 | INFO    | Model fingerprint: 0x46ec6337
+19:20:30 | INFO    | Variable types: 158 continuous, 965 integer (935 binary)
+19:20:30 | INFO    | Coefficient statistics:
+19:20:30 | INFO    |   Matrix range     [1e+00, 5e+02]
+19:20:30 | INFO    |   Objective range  [1e-03, 1e+00]
+19:20:30 | INFO    |   Bounds range     [1e+00, 3e+01]
+19:20:30 | INFO    |   RHS range        [1e+00, 1e+04]
+19:20:30 | INFO    | Presolve removed 3585 rows and 1021 columns
+19:20:30 | INFO    | Presolve time: 0.01s
+19:20:30 | INFO    | Presolved: 267 rows, 102 columns, 1118 nonzeros
+19:20:30 | INFO    | Variable types: 29 continuous, 73 integer (65 binary)
+19:20:30 | INFO    | Root relaxation presolve removed 10 rows and 0 columns
+19:20:30 | INFO    | Root relaxation presolved: 257 rows, 111 columns, 1098 nonzeros
+19:20:30 | INFO    | 
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Root relaxation: objective 1.500000e-02, 68 iterations, 0.00 seconds (0.00 work units)
+19:20:30 | INFO    | 
+19:20:30 | INFO    |     Nodes    |    Current Node    |     Objective Bounds      |     Work
+19:20:30 | INFO    |  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+19:20:30 | INFO    | 
+19:20:30 | INFO    |      0     0    0.01500    0   12          -    0.01500      -     -    0s
+19:20:30 | INFO    | H    0     0                      76.1370000    0.01500   100%     -    0s
+19:20:30 | INFO    |      0     0    0.01500    0   27   76.13700    0.01500   100%     -    0s
+19:20:30 | INFO    |      0     0    0.01500    0   27   76.13700    0.01500   100%     -    0s
+19:20:30 | INFO    | H    0     0                      75.1050000    0.01500   100%     -    0s
+19:20:30 | INFO    |      0     0    0.02435    0   28   75.10500    0.02435   100%     -    0s
+19:20:30 | INFO    |      0     0    0.02700    0   30   75.10500    0.02700   100%     -    0s
+19:20:30 | INFO    |      0     0    0.04341    0   35   75.10500    0.04341   100%     -    0s
+19:20:30 | INFO    |      0     0    0.04531    0   26   75.10500    0.04531   100%     -    0s
+19:20:30 | INFO    | H    0     0                      74.0910000    0.04531   100%     -    0s
+19:20:30 | INFO    |      0     0    0.05701    0   30   74.09100    0.05701   100%     -    0s
+19:20:30 | INFO    |      0     0    0.05713    0   31   74.09100    0.05713   100%     -    0s
+19:20:30 | INFO    |      0     0    0.05809    0   30   74.09100    0.05809   100%     -    0s
+19:20:30 | INFO    |      0     0    0.05919    0   31   74.09100    0.05919   100%     -    0s
+19:20:30 | INFO    |      0     0    0.05994    0   30   74.09100    0.05994   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06043    0   30   74.09100    0.06043   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06076    0   31   74.09100    0.06076   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06081    0   34   74.09100    0.06081   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06259    0   29   74.09100    0.06259   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06272    0   33   74.09100    0.06272   100%     -    0s
+19:20:30 | INFO    | H    0     0                      73.1060000    0.06305   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06305    0   29   73.10600    0.06305   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06319    0   33   73.10600    0.06319   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06664    0   32   73.10600    0.06664   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06748    0   29   73.10600    0.06748   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06789    0   32   73.10600    0.06789   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06799    0   36   73.10600    0.06799   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06911    0   34   73.10600    0.06911   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06924    0   34   73.10600    0.06924   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06962    0   32   73.10600    0.06962   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06962    0   31   73.10600    0.06962   100%     -    0s
+19:20:30 | INFO    | H    0     0                      68.0940000    0.06962   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06962    0   31   68.09400    0.06962   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06962    0   31   68.09400    0.06962   100%     -    0s
+19:20:30 | INFO    |      0     0    0.06962    0   30   68.09400    0.06962   100%     -    0s
+19:20:30 | INFO    |      0     2    0.06962    0   27   68.09400    0.06962   100%     -    0s
+19:20:30 | INFO    | *  955   158              20      67.0850000    0.16300   100%   9.7    0s
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Cutting planes:
+19:20:30 | INFO    |   Learned: 12
+19:20:30 | INFO    |   Gomory: 3
+19:20:30 | INFO    |   Cover: 6
+19:20:30 | INFO    |   Implied bound: 37
+19:20:30 | INFO    |   MIR: 98
+19:20:30 | INFO    |   StrongCG: 2
+19:20:30 | INFO    |   Inf proof: 10
+19:20:30 | INFO    |   RLT: 7
+19:20:30 | INFO    |   Relax-and-lift: 13
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Explored 1467 nodes (14353 simplex iterations) in 0.25 seconds (0.18 work units)
+19:20:30 | INFO    | Thread count was 16 (of 16 available processors)
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Solution count 6: 67.085 68.094 73.106 ... 76.137
+19:20:30 | INFO    | 
+19:20:30 | INFO    | Optimal solution found (tolerance 1.00e-02)
+19:20:30 | INFO    | Best objective 6.708500000000e+01, best bound 6.708499999999e+01, gap 0.0000%
+19:20:30 | INFO    | Solution found | route_duration=67.00 | total_wait=85.00
+19:20:30 | INFO    | Objective=67.09 | runtime=0.25s | MIP Gap=0.00%
+19:20:30 | INFO    | Generating Excel output | C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\result_SR_SV_RD_case2_P5_eps9999_2026_05_06_19_20.xlsx
+19:20:30 | INFO    | Excel output written | 12 sheets | C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\result_SR_SV_RD_case2_P5_eps9999_2026_05_06_19_20.xlsx
+19:20:30 | INFO    | Master Pareto updated | 4 total rows | C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\master_pareto.xlsx
+19:20:30 | INFO    | Run complete | run_id=SR_SV_RD_case2_P5_eps9999

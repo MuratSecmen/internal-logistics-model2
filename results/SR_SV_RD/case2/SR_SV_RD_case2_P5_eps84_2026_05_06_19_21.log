@@ -1,0 +1,121 @@
+19:21:12 | INFO    | Run started | run_id: SR_SV_RD_case2_P5_eps84 | log file: C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\SR_SV_RD_case2_P5_eps84_2026_05_06_19_21.log
+19:21:12 | INFO    | Products loaded | sheet=case2 | rows=15
+19:21:12 | INFO    | Data loaded | |N|=31 |Nw|=30 |K|=1 |R|=1 |P|=5 | U=30
+19:21:12 | INFO    | Big-M | time=491.0 precedence=480.0 wait=465.0 load_lb=20 load_ub=20
+19:21:12 | INFO    | Set parameter Username
+19:21:12 | INFO    | Set parameter LicenseID to value 2811848
+19:21:12 | INFO    | Academic license - for non-commercial use only - expires 2027-04-22
+19:21:12 | INFO    | Objective set | primary: min route_duration | tie-break weight on wait: 0.001
+19:21:12 | INFO    | Constraint (3) added | total_wait <= 84
+19:21:12 | INFO    | Constraints (4)-(9) added | route structure
+19:21:12 | INFO    | Constraints (10)-(12) added | product assignment
+19:21:12 | INFO    | Constraints (13)-(15) added | route timing
+19:21:12 | INFO    | Constraints (16) added | time consistency
+19:21:12 | INFO    | Constraints (17)-(19) added | service times
+19:21:12 | INFO    | Constraints (20)-(22) added | precedence, route closure, waiting
+19:21:12 | INFO    | Constraints (23)-(27) added | load propagation
+19:21:12 | INFO    | Constraints (28)-(32) added | MTZ and route ordering
+19:21:12 | INFO    | Set parameter TimeLimit to value 600
+19:21:12 | INFO    | Set parameter MIPGap to value 0.01
+19:21:12 | INFO    | Set parameter Presolve to value 2
+19:21:12 | INFO    | Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\result_SR_SV_RD_case2_P5_eps84_2026_05_06_19_21.log"
+19:21:12 | INFO    | Solver configured | TimeLimit=600s | MIPGap=0.01 | gurobi_log=C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\result_SR_SV_RD_case2_P5_eps84_2026_05_06_19_21.log
+19:21:12 | INFO    | Optimization starting...
+19:21:12 | INFO    | Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+19:21:12 | INFO    | 
+19:21:12 | INFO    | CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+19:21:12 | INFO    | Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Non-default parameters:
+19:21:12 | INFO    | TimeLimit  600
+19:21:12 | INFO    | MIPGap  0.01
+19:21:12 | INFO    | Presolve  2
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Optimize a model with 3852 rows, 1123 columns and 19434 nonzeros
+19:21:12 | INFO    | Model fingerprint: 0xec1dbcca
+19:21:12 | INFO    | Variable types: 158 continuous, 965 integer (935 binary)
+19:21:12 | INFO    | Coefficient statistics:
+19:21:12 | INFO    |   Matrix range     [1e+00, 5e+02]
+19:21:12 | INFO    |   Objective range  [1e-03, 1e+00]
+19:21:12 | INFO    |   Bounds range     [1e+00, 3e+01]
+19:21:12 | INFO    |   RHS range        [1e+00, 5e+02]
+19:21:12 | INFO    | Presolve removed 3621 rows and 1026 columns
+19:21:12 | INFO    | Presolve time: 0.01s
+19:21:12 | INFO    | Presolved: 231 rows, 97 columns, 1186 nonzeros
+19:21:12 | INFO    | Variable types: 28 continuous, 69 integer (61 binary)
+19:21:12 | INFO    | Root relaxation presolve removed 4 rows and 0 columns
+19:21:12 | INFO    | Root relaxation presolved: 227 rows, 100 columns, 1172 nonzeros
+19:21:12 | INFO    | 
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Root relaxation: objective 1.500000e-02, 51 iterations, 0.00 seconds (0.00 work units)
+19:21:12 | INFO    | 
+19:21:12 | INFO    |     Nodes    |    Current Node    |     Objective Bounds      |     Work
+19:21:12 | INFO    |  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+19:21:12 | INFO    | 
+19:21:12 | INFO    |      0     0    0.01500    0   17          -    0.01500      -     -    0s
+19:21:12 | INFO    |      0     0    0.02578    0   29          -    0.02578      -     -    0s
+19:21:12 | INFO    |      0     0    0.02779    0   31          -    0.02779      -     -    0s
+19:21:12 | INFO    |      0     0    0.04728    0   28          -    0.04728      -     -    0s
+19:21:12 | INFO    |      0     0    0.05654    0   34          -    0.05654      -     -    0s
+19:21:12 | INFO    |      0     0    0.06530    0   32          -    0.06530      -     -    0s
+19:21:12 | INFO    |      0     0    0.06804    0   33          -    0.06804      -     -    0s
+19:21:12 | INFO    |      0     0    0.07140    0   25          -    0.07140      -     -    0s
+19:21:12 | INFO    |      0     0    0.07149    0   23          -    0.07149      -     -    0s
+19:21:12 | INFO    |      0     0    0.07161    0   33          -    0.07161      -     -    0s
+19:21:12 | INFO    |      0     0    0.07188    0   32          -    0.07188      -     -    0s
+19:21:12 | INFO    |      0     0    0.07442    0   29          -    0.07442      -     -    0s
+19:21:12 | INFO    |      0     0    0.07808    0   28          -    0.07808      -     -    0s
+19:21:12 | INFO    |      0     0    0.07941    0   31          -    0.07941      -     -    0s
+19:21:12 | INFO    |      0     0    0.08003    0   32          -    0.08003      -     -    0s
+19:21:12 | INFO    |      0     0   47.02800    0   30          -   47.02800      -     -    0s
+19:21:12 | INFO    |      0     0   51.01500    0   30          -   51.01500      -     -    0s
+19:21:12 | INFO    |      0     0   51.03100    0   20          -   51.03100      -     -    0s
+19:21:12 | INFO    |      0     0   51.07340    0   30          -   51.07340      -     -    0s
+19:21:12 | INFO    |      0     0   53.05700    0   34          -   53.05700      -     -    0s
+19:21:12 | INFO    |      0     0   57.04000    0   37          -   57.04000      -     -    0s
+19:21:12 | INFO    |      0     0   57.04000    0   38          -   57.04000      -     -    0s
+19:21:12 | INFO    |      0     0   57.04000    0   38          -   57.04000      -     -    0s
+19:21:12 | INFO    |      0     0   58.04500    0   32          -   58.04500      -     -    0s
+19:21:12 | INFO    |      0     0   59.04511    0   31          -   59.04511      -     -    0s
+19:21:12 | INFO    |      0     2   59.04511    0   25          -   59.04511      -     -    0s
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Cutting planes:
+19:21:12 | INFO    |   Gomory: 1
+19:21:12 | INFO    |   Implied bound: 12
+19:21:12 | INFO    |   MIR: 29
+19:21:12 | INFO    |   RLT: 2
+19:21:12 | INFO    |   Relax-and-lift: 4
+19:21:12 | INFO    |   PSD: 1
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Explored 756 nodes (5740 simplex iterations) in 0.15 seconds (0.11 work units)
+19:21:12 | INFO    | Thread count was 16 (of 16 available processors)
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Solution count 0
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Model is infeasible
+19:21:12 | INFO    | Best objective -, best bound -, gap -
+19:21:12 | ERROR   | Model is INFEASIBLE — computing IIS
+19:21:12 | INFO    | Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+19:21:12 | INFO    | 
+19:21:12 | INFO    | CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+19:21:12 | INFO    | Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Non-default parameters:
+19:21:12 | INFO    | TimeLimit  600
+19:21:12 | INFO    | MIPGap  0.01
+19:21:12 | INFO    | Presolve  2
+19:21:12 | INFO    | 
+19:21:12 | INFO    | 
+19:21:12 | INFO    | Computing Irreducible Inconsistent Subsystem (IIS)...
+19:21:12 | INFO    | 
+19:21:12 | INFO    |            Constraints          |            Bounds           |  Runtime
+19:21:12 | INFO    |       Min       Max     Guess   |   Min       Max     Guess   |
+19:21:12 | INFO    | --------------------------------------------------------------------------
+19:21:12 | INFO    |         0      3852         -         0       188         -           0s
+19:21:17 | INFO    |        26      3719         -         0       185         -           5s
+19:21:20 | INFO    |        50      3435         -         0       183         -           9s
+19:21:20 | INFO    | 
+19:21:20 | INFO    | Non-minimal IIS computed: 3435 constraints, 183 bounds
+19:21:20 | INFO    | IIS runtime: 8.53 seconds (8.99 work units)
+19:21:20 | ERROR   | IIS written | C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results\SR_SV_RD\case2\infeasible_SR_SV_RD_case2_P5_eps84_2026_05_06_19_21.ilp
+19:21:20 | INFO    | Run complete | run_id=SR_SV_RD_case2_P5_eps84
