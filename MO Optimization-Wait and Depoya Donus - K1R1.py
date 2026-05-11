@@ -426,7 +426,7 @@ for j in Nw:
             load_out = quicksum(q_product[p] * f[p, k, r] for p in P if d[p] == j)
 
             m.addConstr(
-                delta[j, k, r] == load_in - load_out,
+                delta[j, k, r] >= load_in - load_out,
                 name=f"c23[{j},{k},{r}]"
             )
 
