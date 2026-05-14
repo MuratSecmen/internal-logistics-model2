@@ -6,7 +6,7 @@ import pandas as pd
 # =========================================================
 # CONFIG
 # =========================================================
-INPUT_DIR = r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\inputs"
+INPUT_DIR = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\inputs"
 
 FILES = [
     "products_4part.xlsx",
@@ -143,7 +143,7 @@ def load_products(file_name, sheet_name):
     return parts
 
 # =========================================================
-# RT(n)
+# RT(n) — earliest feasible service-start time at node n
 # =========================================================
 def calculate_rt(node, parts, dist):
     term1 = 0.0
@@ -158,6 +158,100 @@ def calculate_rt(node, parts, dist):
                          + data["load_time"] + dist.get((o, node), 0.0))
             term2 = max(term2, candidate)
     return max(term1, term2)
+
+# =========================================================
+# LST(n) — latest feasible service-start time at node n
+# RT(n)'nin simetrik geriye-doğru karşılığı.
+# =========================================================
+def calculate_lst(node, parts, dist):
+    """
+    Latest Service Time at node n.
+
+    RT(n) ileri yönlü bir alt sınırdır: 'depodan başlarsak n'de en erken ne
+    zaman servis başlatılabilir?' LST(n) onun simetrik geriye-doğru
+    karşılığıdır: 'vardiya bitmeden tüm zorunlu yükümlülükleri
+    tamamlayabilmek için n'de servisi en geç ne zaman başlatabiliriz?'
+
+    Tanım:
+      LST(n) = SHIFT_END − max_{p ∈ touches(n)} remaining(n, p)
+
+    Burada remaining(n, p), n düğümünde servis başladıktan sonra parça p
+    için yapılması gereken minimum işin alt sınırıdır:
+
+      • n, p'nin origin'i (o_p = n) ise:
+          remaining = s^l_p + c(n, d_p) + s^u_p + c(d_p, h)
+          (yükle, d_p'ye git, boşalt, depoya dön)
+
+      • n, p'nin destination'ı (d_p = n) ise:
+          remaining = s^u_p + c(n, h)
+          (boşalt, depoya dön)
+
+      • n herhangi bir parçaya dokunmuyorsa (yalnız geçiş noktası ise):
+          remaining = c(n, h)
+
+    Geçerlilik (validity):
+      'remaining' bir alt sınırdır; gerçek rota n ile h arasında başka
+      düğümler içerebilir. Dolayısıyla LST(n) gerçek 'en geç ts'in üst
+      sınırıdır. Bunun pratik sonucu:
+        • ts_n > LST(n)  ⇒  rota KESİN infeasible (erken sonlandırma valid)
+        • ts_n ≤ LST(n)  ⇒  rota muhtemelen feasible (kesin değil — depo
+                              dönüş kontrolü yine de gerekir)
+
+    Tezdeki rolü:
+      (1) simulate() içinde erken infeasibility filtresi olarak kullanılır;
+          aksi takdirde simülasyonun sonunda yakalanacak shift-overrun
+          ihlallerini daha erken yakalar.
+      (2) Her düğümün slack = LST(n) − ts(n) değeri hesaplanır; min_slack
+          rotanın robustluğunu (tightness) ölçen bir metrik olarak
+          raporlanır. Düşük slack, takip eden eklemelerin zor olacağına
+          işaret eder.
+
+    NOT: Bu fonksiyon, tie-breaking zincirine doğrudan eklenmemiştir.
+    LST'nin seçim kriterine entegrasyonu, empirik veri toplandıktan sonra
+    bir sonraki tasarım iterasyonunun (v4) konusudur.
+    """
+    if node == "h":
+        return SHIFT_END
+
+    # Minimum gereklilik: en azından depoya dönmek
+    max_remaining = dist.get((node, "h"), 0.0)
+
+    for p, data in parts.items():
+        if data["origin"] == node:
+            o, d = data["origin"], data["destination"]
+            remaining = (data["load_time"]
+                         + dist.get((o, d), 0.0)
+                         + data["unload_time"]
+                         + dist.get((d, "h"), 0.0))
+            if remaining > max_remaining:
+                max_remaining = remaining
+        if data["destination"] == node:
+            remaining = data["unload_time"] + dist.get((node, "h"), 0.0)
+            if remaining > max_remaining:
+                max_remaining = remaining
+
+    return SHIFT_END - max_remaining
+
+# =========================================================
+# temporal pressure (c2 tie-breaker için, v2'den)
+# =========================================================
+def calculate_temporal_pressure(pid, parts, dist):
+    """
+    Parça başına zamansal baskı skoru.
+
+    Tanım:
+      pressure(p) = c(h, o_p) − e_p
+
+    Yorum:
+      • pressure > 0: parça hazır olduğunda araç henüz oraya varamamış
+                      → kaçınılmaz bekleme, öncelikli
+      • pressure ≤ 0: araç parçadan önce orada → esnek, sonraya bırakılabilir
+
+    Lower bound DEĞİLDİR; bir heuristik öncelik skorudur. MILP'in Eq. 39-41
+    ile çakışmaz. c2 eşitliğinde tie-breaker olarak kullanılır.
+    """
+    d = parts[pid]
+    return dist.get(("h", d["origin"]), 0.0) - d["ready_time"]
 
 # =========================================================
 # ROUTE CLASS
@@ -195,6 +289,10 @@ class Route:
         arrivals_to_dest = {}
         node_pickups, node_deliveries = self.build_node_events(parts)
 
+        # v3: rota boyunca takip edilen robustluk metrikleri
+        min_slack      = float("inf")
+        min_slack_node = None
+
         for n in self.customer_nodes():
             ta_n = td_prev + dist.get((prev_node, n), 0.0)
             pickups_here    = sorted(node_pickups.get(n, []))
@@ -203,15 +301,43 @@ class Route:
             load_total   = sum(parts[p]["load_time"]   for p in pickups_here)
             rt_n = calculate_rt(n, parts, dist)
             ts_n = max(ta_n, rt_n)
+
+            # ── v3: LST kontrolü ve slack hesabı ─────────────────────
+            lst_n   = calculate_lst(n, parts, dist)
+            slack_n = lst_n - ts_n
+            if slack_n < -1e-9:
+                # Erken infeasibility tespiti: ts_n > LST(n) demek bu rota
+                # vardiya içinde bitirilemez (depo dönüş kontrolünden önce
+                # yakalanmış olur).
+                return {
+                    "feasible": False,
+                    "reason":   "lst_overflow",
+                    "node":     n,
+                    "ts":       ts_n,
+                    "lst":      lst_n,
+                    "slack":    slack_n,
+                    "timeline": timeline,
+                }
+            if slack_n < min_slack:
+                min_slack      = slack_n
+                min_slack_node = n
+            # ────────────────────────────────────────────────────────
+
             td_n = ts_n + unload_total + load_total
 
             current_load -= sum(parts[p]["area"] for p in deliveries_here)
             current_load += sum(parts[p]["area"] for p in pickups_here)
 
+            # Kapasite kontrolü (v2'den)
             if current_load > self.capacity + 1e-9:
-                return {"feasible": False, "reason": "capacity",
-                        "node": n, "load": round(current_load, 4),
-                        "capacity": self.capacity, "timeline": timeline}
+                return {
+                    "feasible": False,
+                    "reason":   "capacity",
+                    "node":     n,
+                    "load":     round(current_load, 4),
+                    "capacity": self.capacity,
+                    "timeline": timeline
+                }
 
             for p in deliveries_here:
                 arrivals_to_dest[p] = ta_n
@@ -224,6 +350,7 @@ class Route:
             timeline.append({
                 "node": n, "service_type": service_type,
                 "ta": ta_n, "rt": rt_n, "ts": ts_n, "td": td_n,
+                "lst": lst_n, "slack": slack_n,                   # v3 YENİ
                 "node_wait": ts_n - ta_n,
                 "unload_total": unload_total, "load_total": load_total,
                 "service_total": unload_total + load_total,
@@ -260,8 +387,16 @@ class Route:
             timeline[idx]["next_arrival"]    = next_arrival
             timeline[idx]["travel_to_next"]  = next_arrival - timeline[idx]["td"]
 
+        # Boş rota durumunda min_slack hâlâ inf — anlamlı bir değere normalize et
+        if min_slack == float("inf"):
+            min_slack      = None
+            min_slack_node = None
+
         return {"feasible": True, "timeline": timeline,
-                "arrivals_to_dest": arrivals_to_dest, "depot_arrival": depot_arrival}
+                "arrivals_to_dest": arrivals_to_dest,
+                "depot_arrival": depot_arrival,
+                "min_slack": min_slack,                # v3 YENİ
+                "min_slack_node": min_slack_node}      # v3 YENİ
 
     def _calc_distance_increase_insert_two(self, i, j, o, d, dist):
         r = self.nodes
@@ -355,10 +490,7 @@ def compute_f1(sim_result):
     return sim_result["depot_arrival"] - SHIFT_START
 
 def compute_f2(parts, sim_result):
-    """
-    f2 = Σ max(0, ta_{d_p} + su_p - e_p)
-    MILP kısıt (22) ile birebir aynı tanım.
-    """
+    """f2 = Σ max(0, ta_{d_p} + su_p - e_p)   [MILP kısıt (21) ile tutarlı]"""
     total_wait = 0.0
     waits      = {}
     for p, ta_dp in sim_result["arrivals_to_dest"].items():
@@ -418,10 +550,14 @@ def extract_milp_vars(route, parts, dist, sim, k, r=1):
                    "delta_val": node_pickup_area.get(row["node"],0.0) - node_delivery_area.get(row["node"],0.0)}
                   for row in timeline]
 
+    # v3: itinerary genişletildi — lst ve slack kolonları eklendi
     itinerary_list = [{"k":k,"r":r,"j":row["node"],"u":idx,
-                        "ta_stamp":minutes_to_hhmm(row["ta"]),
-                        "td_stamp":minutes_to_hhmm(row["td"]),
-                        "y_after":row["load"]}
+                        "ta_stamp": minutes_to_hhmm(row["ta"]),
+                        "ts_stamp": minutes_to_hhmm(row["ts"]),
+                        "td_stamp": minutes_to_hhmm(row["td"]),
+                        "lst":      row["lst"],
+                        "slack":    row["slack"],
+                        "y_after":  row["load"]}
                        for idx, row in enumerate(timeline, 1)]
 
     return {"x":x_list,"f":f_list,"u":u_list,"z":z_list,"w":w_list,
@@ -437,12 +573,14 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
     vars_ = extract_milp_vars(route, parts, dist, sim, k=k, r=r)
 
     df_opt = pd.DataFrame([{
-        "model":               "heuristic_solomon_i1_pdp",
+        "model":               "heuristic_solomon_i1_pdp_v3",
         "f1_route_time":       f1,
         "f2_total_wait":       f2,
         "f2_definition":       "sum(max(0, ta_dp + su_p - ep))",
         "depot_arrival":       sim["depot_arrival"],
         "depot_arrival_stamp": minutes_to_hhmm(sim["depot_arrival"]),
+        "min_slack":           sim.get("min_slack"),          # v3 YENİ
+        "min_slack_node":      sim.get("min_slack_node"),     # v3 YENİ
         "status":              "HEURISTIC",
         "instance_file":       file_name,
         "instance_sheet":      sheet_name,
@@ -453,6 +591,9 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
         "ALPHA1":              ALPHA1,
         "ALPHA2":              ALPHA2,
         "LAMBDA_C2":           LAMBDA_C2,
+        "vehicle_capacity":    route.capacity,
+        "tie_break_rule":      "c2 -> pressure -> c1 -> part_index",
+        "lst_filter":          "active (early infeasibility termination)",
     }])
 
     _cols = {
@@ -466,7 +607,7 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
         "ts":        ["var","node","k","r","time","stamp"],
         "y":         ["var","node","k","r","y_val"],
         "delta":     ["var","node","k","r","delta_val"],
-        "itinerary": ["k","r","j","u","ta_stamp","td_stamp","y_after"],
+        "itinerary": ["k","r","j","u","ta_stamp","ts_stamp","td_stamp","lst","slack","y_after"],
     }
     dfs = {key: pd.DataFrame(vars_[key]) if vars_[key]
            else pd.DataFrame(columns=_cols[key]) for key in _cols}
@@ -487,6 +628,8 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
 
     print(f"  ✓ Excel (12 sheets) → {output_path}")
     print(f"      f1={f1:.2f}  f2={f2:.2f}  |  arcs={len(dfs['x'])}  parts={len(dfs['f'])}")
+    if sim.get("min_slack") is not None:
+        print(f"      min_slack={sim['min_slack']:.2f} dk @ node={sim['min_slack_node']}")
 
 # =========================================================
 # SOLVER
@@ -505,29 +648,72 @@ def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
         unrouted = set(parts.keys())
         route    = Route(vehicle_id, capacity, SHIFT_START)
 
+        n_tie_pressure = 0
+        n_tie_c1       = 0
+        n_tie_index    = 0
+
         while unrouted:
-            best_choice = None
-            best_c2     = -float("inf")
+            best_choice   = None
+            best_c2       = -float("inf")
+            best_pressure = -float("inf")
+            best_c1       = float("inf")
+            best_pid      = None
+
             for p in sorted(unrouted):
                 c1, spec = route.try_insert(p, parts, dist, debug=debug)
-                if spec is not None:
-                    c2 = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
-                    if c2 > best_c2:
-                        best_c2 = c2; best_choice = (p, spec, c1, c2)
+                if spec is None:
+                    continue
+                c2       = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
+                pressure = calculate_temporal_pressure(p, parts, dist)
+
+                # Tie-breaking zinciri:
+                #   1) c2 (higher)
+                #   2) pressure (higher)              [v2]
+                #   3) c1 (lower)
+                #   4) part_index (lower)
+                is_better = False
+                tie_kind  = None
+                if c2 > best_c2 + 1e-9:
+                    is_better = True
+                elif abs(c2 - best_c2) < 1e-9:
+                    if pressure > best_pressure + 1e-9:
+                        is_better = True; tie_kind = "pressure"
+                    elif abs(pressure - best_pressure) < 1e-9:
+                        if c1 < best_c1 - 1e-9:
+                            is_better = True; tie_kind = "c1"
+                        elif abs(c1 - best_c1) < 1e-9 and (best_pid is None or p < best_pid):
+                            is_better = True; tie_kind = "index"
+
+                if is_better:
+                    if   tie_kind == "pressure": n_tie_pressure += 1
+                    elif tie_kind == "c1":       n_tie_c1       += 1
+                    elif tie_kind == "index":    n_tie_index    += 1
+
+                    best_c2       = c2
+                    best_pressure = pressure
+                    best_c1       = c1
+                    best_pid      = p
+                    best_choice   = (p, spec, c1, c2, pressure)
+
             if best_choice is None:
                 print(f"  ⚠ Unrouted: {unrouted}"); break
-            p, spec, c1_val, c2_val = best_choice
+            p, spec, c1_val, c2_val, pr_val = best_choice
             route.apply(p, spec, parts)
             unrouted.remove(p)
-            print(f"    → inserted {p} (case={spec['case']}, c1={c1_val:.2f}, c2={c2_val:.2f})")
+            print(f"    → inserted {p}  case={spec['case']}  "
+                  f"c1={c1_val:.2f}  c2={c2_val:.2f}  pressure={pr_val:.2f}")
 
-        print(f"\n  Route: {' → '.join(route.nodes)}")
+        print(f"\n  Tie-break istatistiği: pressure={n_tie_pressure}  "
+              f"c1={n_tie_c1}  index={n_tie_index}")
+        print(f"  Route: {' → '.join(route.nodes)}")
         sim = route.simulate(parts, dist)
 
         if sim["feasible"]:
-            f1          = compute_f1(sim)
-            f2, waits   = compute_f2(parts, sim)
+            f1        = compute_f1(sim)
+            f2, waits = compute_f2(parts, sim)
             print(f"  f1 = {f1:.2f} dk  |  f2 = {f2:.2f} dk  |  depot = {minutes_to_hhmm(sim['depot_arrival'])}")
+            if sim.get("min_slack") is not None:
+                print(f"  Robustluk:  min_slack = {sim['min_slack']:.2f} dk  @ node = {sim['min_slack_node']}")
             print(f"  Parça bekleme detayı (w_p = ta_dp + su_p - ep):")
             for p, w in sorted(waits.items()):
                 ta_dp = sim["arrivals_to_dest"].get(p, 0)
@@ -541,7 +727,28 @@ def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
             write_milp_format_excel(excel_path, file_name, sheet, route, parts, dist, sim,
                                     vehicle_id, f1, f2)
         else:
-            print(f"  ✗ INFEASIBLE — reason: {sim.get('reason')}  detail: {sim}")
+            reason = sim.get("reason")
+            if reason == "capacity":
+                print(f"  ✗ INFEASIBLE — kapasite aşımı: "
+                      f"node={sim.get('node')}  "
+                      f"load={sim.get('load')} > capacity={sim.get('capacity')}")
+            elif reason == "shift":
+                print(f"  ✗ INFEASIBLE — vardiya aşımı: "
+                      f"depot_arrival={sim.get('depot_arrival'):.2f} > {SHIFT_END}")
+            elif reason == "lst_overflow":
+                # v3 YENİ: LST filtresinin yakaladığı erken infeasibility
+                print(f"  ✗ INFEASIBLE — LST aşımı (erken tespit): "
+                      f"node={sim.get('node')}  "
+                      f"ts={sim.get('ts'):.2f} > LST={sim.get('lst'):.2f}  "
+                      f"(slack={sim.get('slack'):.2f})")
+            elif reason == "precedence":
+                print(f"  ✗ INFEASIBLE — precedence ihlali: "
+                      f"part={sim.get('part')}  "
+                      f"origin={sim.get('origin')} → dest={sim.get('destination')}")
+            elif reason == "missing_visit":
+                print(f"  ✗ INFEASIBLE — eksik ziyaret: part={sim.get('part')}")
+            else:
+                print(f"  ✗ INFEASIBLE — reason={reason}  detail={sim}")
 
 # =========================================================
 # ENTRY POINT
@@ -549,7 +756,11 @@ def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
 def run_all(debug=False):
     vehicle_id, capacity, dist = load_common_data()
     print(f"Vehicle: {vehicle_id}  |  Capacity: {capacity} m²")
-    print(f"f2 tanımı: w_p = max(0, ta_dp + su_p - ep)  [MILP kısıt (22) ile tutarlı]")
+    print(f"f2 tanımı: w_p = max(0, ta_dp + su_p - ep)  [MILP kısıt (21) ile tutarlı]")
+    print(f"Tie-break:  c2 > pressure > c1 > part_index")
+    print(f"Kapasite kontrolü:  simulate() içinde aktif")
+    print(f"LST filtresi:  simulate() içinde aktif (erken infeasibility termination)")
+    print(f"Robustluk metriği:  min_slack = min(LST(n) - ts(n)) raporlanıyor")
     print(f"Output: {OUTPUT_DIR}\n")
 
     for f in FILES:
