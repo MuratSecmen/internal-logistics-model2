@@ -21,9 +21,9 @@ SHIFT_END   = SHIFT_START + T_MAX
 
 LAMBDA_C2 = 1.0
 ALPHA1    = 1.0
-ALPHA2    = 0.5
+ALPHA2    = 0.0
 
-OUTPUT_DIR = os.path.join(INPUT_DIR, "heuristic_results")
+OUTPUT_DIR = r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results\heuristic_result"
 
 # =========================================================
 # HELPERS
@@ -669,7 +669,7 @@ def run_all(debug=False):
         solve_file(f, vehicle_id, capacity, dist, debug=debug)
 
     print("\n" + "="*60)
-    print("TAMAMLANDI — heuristic_results/ klasörünü kontrol et")
+    print(f"TAMAMLANDI — çıktı klasörünü kontrol et: {OUTPUT_DIR}")
     print("="*60)
 
 if __name__ == "__main__":

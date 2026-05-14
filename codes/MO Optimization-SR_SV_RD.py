@@ -13,7 +13,7 @@ MODEL_NAME = "SR_SV_RD"
 # Run parameters (change per run)
 CASE_NAME  = "case1"   # case1 | case2 | case3
 EPS_WAIT   = 9999
-N_PRODUCTS = 10
+N_PRODUCTS = 5
 
 
 RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results"
