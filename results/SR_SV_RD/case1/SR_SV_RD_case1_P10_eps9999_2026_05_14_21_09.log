@@ -1,0 +1,122 @@
+21:09:46 | INFO    | Run started | run_id: SR_SV_RD_case1_P10_eps9999 | log file: C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results\SR_SV_RD\case1\SR_SV_RD_case1_P10_eps9999_2026_05_14_21_09.log
+21:09:47 | INFO    | Products loaded | sheet=case1 | rows=30
+21:09:47 | INFO    | Data loaded | |N|=31 |Nw|=30 |K|=1 |R|=1 |P|=10 | U=30
+21:09:47 | INFO    | Big-M | time=491.0 precedence=480.0 wait=465.0 load_lb=20 load_ub=20
+21:09:47 | INFO    | Set parameter Username
+21:09:47 | INFO    | Set parameter LicenseID to value 2811848
+21:09:47 | INFO    | Academic license - for non-commercial use only - expires 2027-04-22
+21:09:47 | INFO    | Objective set | primary: min route_duration | tie-break weight on wait: 0.001
+21:09:47 | INFO    | Constraint (3) added | total_wait <= 9999
+21:09:47 | INFO    | Constraints (4)-(9) added | route structure
+21:09:47 | INFO    | Constraints (10)-(12) added | product assignment
+21:09:47 | INFO    | Constraints (13)-(15) added | route timing
+21:09:47 | INFO    | Constraints (16) added | time consistency
+21:09:47 | INFO    | Constraints (17)-(19) added | service times
+21:09:47 | INFO    | Constraints (20)-(22) added | precedence, route closure, waiting
+21:09:47 | INFO    | Constraints (23)-(27) added | load propagation
+21:09:47 | INFO    | Constraints (28)-(32) added | MTZ and route ordering
+21:09:47 | INFO    | Set parameter TimeLimit to value 1200
+21:09:47 | INFO    | Set parameter MIPGap to value 0.01
+21:09:47 | INFO    | Set parameter Presolve to value 2
+21:09:47 | INFO    | Set parameter LogFile to value "C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results\SR_SV_RD\case1\result_SR_SV_RD_case1_P10_eps9999_2026_05_14_21_09.log"
+21:09:47 | INFO    | Solver configured | TimeLimit=1200s | MIPGap=0.01 | gurobi_log=C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results\SR_SV_RD\case1\result_SR_SV_RD_case1_P10_eps9999_2026_05_14_21_09.log
+21:09:47 | INFO    | Optimization starting...
+21:09:47 | INFO    | Gurobi Optimizer version 12.0.0 build v12.0.0rc1 (win64 - Windows 10.0 (19045.2))
+21:09:47 | INFO    | 
+21:09:47 | INFO    | CPU model: 12th Gen Intel(R) Core(TM) i7-12650H, instruction set [SSE2|AVX|AVX2]
+21:09:47 | INFO    | Thread count: 10 physical cores, 16 logical processors, using up to 16 threads
+21:09:47 | INFO    | 
+21:09:47 | INFO    | Non-default parameters:
+21:09:47 | INFO    | TimeLimit  1200
+21:09:47 | INFO    | MIPGap  0.01
+21:09:47 | INFO    | Presolve  2
+21:09:47 | INFO    | 
+21:09:47 | INFO    | Optimize a model with 3887 rows, 1133 columns and 19844 nonzeros
+21:09:47 | INFO    | Model fingerprint: 0xbf4fe724
+21:09:47 | INFO    | Variable types: 163 continuous, 970 integer (940 binary)
+21:09:47 | INFO    | Coefficient statistics:
+21:09:47 | INFO    |   Matrix range     [1e+00, 5e+02]
+21:09:47 | INFO    |   Objective range  [1e-03, 1e+00]
+21:09:47 | INFO    |   Bounds range     [1e+00, 3e+01]
+21:09:47 | INFO    |   RHS range        [1e+00, 1e+04]
+21:09:48 | INFO    | Presolve removed 2253 rows and 640 columns
+21:09:48 | INFO    | Presolve time: 0.18s
+21:09:48 | INFO    | Presolved: 1634 rows, 493 columns, 11741 nonzeros
+21:09:48 | INFO    | Variable types: 63 continuous, 430 integer (410 binary)
+21:09:48 | INFO    | Root relaxation presolve removed 23 rows and 0 columns
+21:09:48 | INFO    | Root relaxation presolved: 1611 rows, 515 columns, 11697 nonzeros
+21:09:48 | INFO    | 
+21:09:48 | INFO    | 
+21:09:48 | INFO    | Root relaxation: objective 3.000000e-02, 188 iterations, 0.05 seconds (0.02 work units)
+21:09:48 | INFO    | 
+21:09:48 | INFO    |     Nodes    |    Current Node    |     Objective Bounds      |     Work
+21:09:48 | INFO    |  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+21:09:48 | INFO    | 
+21:09:48 | INFO    |      0     0    0.03000    0   27          -    0.03000      -     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   45          -    0.03000      -     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   49          -    0.03000      -     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   15          -    0.03000      -     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   25          -    0.03000      -     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   24          -    0.03000      -     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   40          -    0.03000      -     -    0s
+21:09:48 | INFO    | H    0     0                     176.8900000    0.03000   100%     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   41  176.89000    0.03000   100%     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   36  176.89000    0.03000   100%     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   40  176.89000    0.03000   100%     -    0s
+21:09:48 | INFO    |      0     0    0.03000    0   38  176.89000    0.03000   100%     -    0s
+21:09:48 | INFO    |      0     2    0.03000    0   38  176.89000    0.03000   100%     -    0s
+21:09:48 | INFO    | H  203   207                     170.8050000    0.04800   100%  77.5    0s
+21:09:48 | INFO    | H  255   272                     164.6980000    0.04800   100%  71.9    1s
+21:09:48 | INFO    | H  345   378                     164.6800000    0.04800   100%  64.3    1s
+21:09:48 | INFO    | H  358   378                     155.7220000    0.04800   100%  63.2    1s
+21:09:49 | INFO    | H 1453  1345                     154.7370000    0.04800   100%  36.3    1s
+21:09:49 | INFO    | H 1539  1411                     153.7350000    0.05459   100%  37.2    1s
+21:09:49 | INFO    | H 1541  1411                     148.6940000    0.05459   100%  37.2    1s
+21:09:49 | INFO    | H 1944  1651                     148.6820000    0.05514   100%  34.8    1s
+21:09:49 | INFO    | H 1944  1568                     142.6400000    0.05514   100%  34.8    2s
+21:09:50 | INFO    | H 1986  1532                     141.6280000    0.06768   100%  35.9    2s
+21:09:50 | INFO    | H 2062  1500                     141.6110000    0.06919   100%  36.0    2s
+21:09:50 | INFO    | H 2067  1426                     141.6080000    0.06919   100%  36.0    2s
+21:09:50 | INFO    | H 2069  1379                     137.6000000    0.06919   100%  36.0    2s
+21:09:50 | INFO    | H 2080  1311                     132.5950000    0.06919   100%  36.1    2s
+21:09:50 | INFO    | H 2618  1600                     132.5700000    0.06919   100%  35.5    2s
+21:09:50 | INFO    | H 2858  1773                     131.5610000    0.07211   100%  35.7    3s
+21:09:51 | INFO    | H 3953  2194                     128.5680000    0.07450   100%  34.5    3s
+21:09:51 | INFO    | H 3957  2140                     127.5650000    0.07450   100%  34.5    3s
+21:09:52 | INFO    | H10502  7085                     127.5400000    0.07978   100%  25.7    4s
+21:09:52 | INFO    |  12969  9095    0.17049   54   46  127.54000    0.08068   100%  24.7    5s
+21:09:53 | INFO    | H13251  9284                     127.5330000    0.08068   100%  24.8    5s
+21:09:58 | INFO    |  43137 34090    0.23689   95   38  127.53300    0.08425   100%  18.8   11s
+21:10:00 | INFO    | H43380 32549                     126.5200000    0.09572   100%  19.2   12s
+21:10:00 | INFO    | H43523 31033                     124.5370000    0.09572   100%  19.3   12s
+21:10:02 | INFO    | H48166 31865                     123.5130000    0.09876   100%  20.5   14s
+21:10:02 | INFO    | H48425 30563                     117.4590000    0.09876   100%  20.5   14s
+21:10:02 | INFO    |  49466 31046 infeasible  135       117.45900    0.09897   100%  20.5   15s
+21:10:04 | INFO    | H58668 34164                     117.4520000    0.10045   100%  21.4   16s
+21:10:04 | INFO    | H59377 33845                     117.4500000    0.10072   100%  21.4   17s
+21:10:04 | INFO    | H59573 32525                     115.4380000    0.10072   100%  21.4   17s
+21:10:07 | INFO    |  68003 38325    0.10698   40   56  115.43800    0.10149   100%  22.1   20s
+21:10:12 | INFO    |  96829 52395    0.15411   57   47  115.43800    0.10246   100%  22.5   25s
+21:10:16 | INFO    | 
+21:10:16 | INFO    | Cutting planes:
+21:10:16 | INFO    |   Learned: 22
+21:10:16 | INFO    |   Gomory: 17
+21:10:16 | INFO    |   Implied bound: 189
+21:10:16 | INFO    |   Projected implied bound: 4
+21:10:16 | INFO    |   MIR: 53
+21:10:16 | INFO    |   StrongCG: 2
+21:10:16 | INFO    |   Flow cover: 168
+21:10:16 | INFO    |   Zero half: 1
+21:10:16 | INFO    |   RLT: 31
+21:10:16 | INFO    |   Relax-and-lift: 26
+21:10:16 | INFO    |   PSD: 8
+21:10:16 | INFO    | 
+21:10:16 | INFO    | Explored 121996 nodes (2801335 simplex iterations) in 28.93 seconds (36.46 work units)
+21:10:16 | INFO    | Thread count was 16 (of 16 available processors)
+21:10:16 | INFO    | 
+21:10:16 | INFO    | Solution count 10: 115.438 117.45 117.459 ... 128.568
+21:10:16 | INFO    | 
+21:10:16 | INFO    | Solve interrupted
+21:10:16 | INFO    | Best objective 1.154380000000e+02, best bound 1.029743927828e-01, gap 99.9108%
+21:10:16 | WARNING | No solution found | status=11
+21:10:16 | INFO    | Run complete | run_id=SR_SV_RD_case1_P10_eps9999

@@ -11,19 +11,19 @@ from gurobipy import GRB, quicksum
 MODEL_NAME = "SR_SV_RD"
 
 # Run parameters (change per run)
-CASE_NAME  = "case3"   # case1 | case2 | case3
-EPS_WAIT   = 130
-N_PRODUCTS = 5
+CASE_NAME  = "case1"   # case1 | case2 | case3
+EPS_WAIT   = 9999
+N_PRODUCTS = 10
 
 
-RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\results"
+RESULTS_ROOT = r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results"
 OUTPUT_DIR = os.path.join(RESULTS_ROOT, MODEL_NAME, CASE_NAME)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
 
 
-TIME_LIMIT = 600
+TIME_LIMIT = 1200
 MIP_GAP = 0.01
 
 SHIFT_START = 0

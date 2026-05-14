@@ -143,7 +143,7 @@ def load_products(file_name, sheet_name):
     return parts
 
 # =========================================================
-# RT(n)
+# RT(n)  —  earliest feasible service-start time at node n
 # =========================================================
 def calculate_rt(node, parts, dist):
     term1 = 0.0
@@ -158,6 +158,43 @@ def calculate_rt(node, parts, dist):
                          + data["load_time"] + dist.get((o, node), 0.0))
             term2 = max(term2, candidate)
     return max(term1, term2)
+
+# =========================================================
+# YENİ: temporal pressure (c2 tie-breaker için)
+# =========================================================
+def calculate_temporal_pressure(pid, parts, dist):
+    """
+    Parça başına zamansal baskı skoru.
+
+    Motivasyon:
+      Solomon I1'in c2 kriteri (λ·c(h,o_p) - c1*) tamamen geometrik bir
+      ölçüdür: yalnızca parçanın depodan uzaklığını ve eklemenin marjinal
+      maliyetini dikkate alır; parçanın ready_time (e_p) bilgisini hiç
+      kullanmaz. Oysa f2 hedefi tamamen e_p ile delivery zamanı arasındaki
+      farka bağlıdır. Bu fonksiyon, c2'nin gözden kaçırdığı temporal
+      boyutu seçim kriterine taşır (tie-breaker olarak).
+
+    Tanım:
+      pressure(p) = c(h, o_p) - e_p
+
+    Yorumlanışı:
+      • pressure > 0:  Depodan o_p'ye varış c(h,o_p), parçanın hazır
+                       olma zamanı e_p'den büyüktür. Araç o_p'ye vardığında
+                       parça çoktan hazır olmuş, bekliyor olacak.
+                       "Kaçınılmaz bekleme" var; f2 katkı riski yüksek.
+                       → ÖNCELİKLİ.
+      • pressure = 0:  Mükemmel senkronizasyon.
+      • pressure < 0:  Parça hazır olmadan araç oraya varabilir; araç
+                       bekleyecek, parça beklemeyecek. Bu parça "rahat";
+                       sonraya bırakılabilir.
+
+    Önemli ayrım:
+      Bu bir LOWER BOUND DEĞİLDİR. MILP'in valid inequalities (Eq. 39–41)
+      ile çakışmaz; onlar f1/f2 için matematiksel alt sınır verir, bu
+      fonksiyon ise seçim sırası için heuristik bir öncelik skoru üretir.
+    """
+    d = parts[pid]
+    return dist.get(("h", d["origin"]), 0.0) - d["ready_time"]
 
 # =========================================================
 # ROUTE CLASS
@@ -208,10 +245,17 @@ class Route:
             current_load -= sum(parts[p]["area"] for p in deliveries_here)
             current_load += sum(parts[p]["area"] for p in pickups_here)
 
+            # ── YENİ: Kapasite kontrolü (feasibility condition iii) ──
             if current_load > self.capacity + 1e-9:
-                return {"feasible": False, "reason": "capacity",
-                        "node": n, "load": round(current_load, 4),
-                        "capacity": self.capacity, "timeline": timeline}
+                return {
+                    "feasible": False,
+                    "reason":   "capacity",
+                    "node":     n,
+                    "load":     round(current_load, 4),
+                    "capacity": self.capacity,
+                    "timeline": timeline
+                }
+            # ─────────────────────────────────────────────────────────
 
             for p in deliveries_here:
                 arrivals_to_dest[p] = ta_n
@@ -357,7 +401,7 @@ def compute_f1(sim_result):
 def compute_f2(parts, sim_result):
     """
     f2 = Σ max(0, ta_{d_p} + su_p - e_p)
-    MILP kısıt (22) ile birebir aynı tanım.
+    MILP kısıt (21) ile birebir aynı tanım.
     """
     total_wait = 0.0
     waits      = {}
@@ -437,7 +481,7 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
     vars_ = extract_milp_vars(route, parts, dist, sim, k=k, r=r)
 
     df_opt = pd.DataFrame([{
-        "model":               "heuristic_solomon_i1_pdp",
+        "model":               "heuristic_solomon_i1_pdp_v2",
         "f1_route_time":       f1,
         "f2_total_wait":       f2,
         "f2_definition":       "sum(max(0, ta_dp + su_p - ep))",
@@ -453,6 +497,8 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
         "ALPHA1":              ALPHA1,
         "ALPHA2":              ALPHA2,
         "LAMBDA_C2":           LAMBDA_C2,
+        "vehicle_capacity":    route.capacity,
+        "tie_break_rule":      "c2 -> pressure -> c1 -> part_index",
     }])
 
     _cols = {
@@ -505,23 +551,69 @@ def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
         unrouted = set(parts.keys())
         route    = Route(vehicle_id, capacity, SHIFT_START)
 
+        # ── YENİ: Tie-breaking sayaçları (sadece raporlama amaçlı) ──
+        n_tie_pressure = 0   # pressure ile çözülen eşitlik sayısı
+        n_tie_c1       = 0   # c1 ile çözülen eşitlik sayısı
+        n_tie_index    = 0   # part index ile çözülen eşitlik sayısı
+
         while unrouted:
-            best_choice = None
-            best_c2     = -float("inf")
+            best_choice   = None
+            best_c2       = -float("inf")
+            best_pressure = -float("inf")
+            best_c1       = float("inf")
+            best_pid      = None
+
             for p in sorted(unrouted):
                 c1, spec = route.try_insert(p, parts, dist, debug=debug)
-                if spec is not None:
-                    c2 = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
-                    if c2 > best_c2:
-                        best_c2 = c2; best_choice = (p, spec, c1, c2)
+                if spec is None:
+                    continue
+                c2       = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
+                pressure = calculate_temporal_pressure(p, parts, dist)
+
+                # ── YENİ: Tie-breaking zinciri ───────────────────────
+                #   1) Daha yüksek c2          → kazanır
+                #   2) c2 eşit  → daha yüksek pressure       (YENİ)
+                #   3) pressure eşit → daha düşük c1*
+                #   4) Hepsi eşit → küçük part index
+                is_better      = False
+                tie_kind       = None
+                if c2 > best_c2 + 1e-9:
+                    is_better = True
+                elif abs(c2 - best_c2) < 1e-9:
+                    if pressure > best_pressure + 1e-9:
+                        is_better = True
+                        tie_kind  = "pressure"
+                    elif abs(pressure - best_pressure) < 1e-9:
+                        if c1 < best_c1 - 1e-9:
+                            is_better = True
+                            tie_kind  = "c1"
+                        elif abs(c1 - best_c1) < 1e-9 and (best_pid is None or p < best_pid):
+                            is_better = True
+                            tie_kind  = "index"
+                # ─────────────────────────────────────────────────────
+
+                if is_better:
+                    if tie_kind == "pressure": n_tie_pressure += 1
+                    elif tie_kind == "c1":     n_tie_c1       += 1
+                    elif tie_kind == "index":  n_tie_index    += 1
+
+                    best_c2       = c2
+                    best_pressure = pressure
+                    best_c1       = c1
+                    best_pid      = p
+                    best_choice   = (p, spec, c1, c2, pressure)
+
             if best_choice is None:
                 print(f"  ⚠ Unrouted: {unrouted}"); break
-            p, spec, c1_val, c2_val = best_choice
+            p, spec, c1_val, c2_val, pr_val = best_choice
             route.apply(p, spec, parts)
             unrouted.remove(p)
-            print(f"    → inserted {p} (case={spec['case']}, c1={c1_val:.2f}, c2={c2_val:.2f})")
+            print(f"    → inserted {p}  case={spec['case']}  "
+                  f"c1={c1_val:.2f}  c2={c2_val:.2f}  pressure={pr_val:.2f}")
 
-        print(f"\n  Route: {' → '.join(route.nodes)}")
+        print(f"\n  Tie-break istatistiği: pressure={n_tie_pressure}  "
+              f"c1={n_tie_c1}  index={n_tie_index}")
+        print(f"  Route: {' → '.join(route.nodes)}")
         sim = route.simulate(parts, dist)
 
         if sim["feasible"]:
@@ -541,7 +633,24 @@ def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
             write_milp_format_excel(excel_path, file_name, sheet, route, parts, dist, sim,
                                     vehicle_id, f1, f2)
         else:
-            print(f"  ✗ INFEASIBLE — reason: {sim.get('reason')}  detail: {sim}")
+            # ── YENİ: Anlamlı infeasibility mesajları ──────────────
+            reason = sim.get("reason")
+            if reason == "capacity":
+                print(f"  ✗ INFEASIBLE — kapasite aşımı: "
+                      f"node={sim.get('node')}  "
+                      f"load={sim.get('load')} > capacity={sim.get('capacity')}")
+            elif reason == "shift":
+                print(f"  ✗ INFEASIBLE — vardiya aşımı: "
+                      f"depot_arrival={sim.get('depot_arrival'):.2f} > {SHIFT_END}")
+            elif reason == "precedence":
+                print(f"  ✗ INFEASIBLE — precedence ihlali: "
+                      f"part={sim.get('part')}  "
+                      f"origin={sim.get('origin')} → dest={sim.get('destination')}")
+            elif reason == "missing_visit":
+                print(f"  ✗ INFEASIBLE — eksik ziyaret: part={sim.get('part')}")
+            else:
+                print(f"  ✗ INFEASIBLE — reason={reason}  detail={sim}")
+            # ─────────────────────────────────────────────────────────
 
 # =========================================================
 # ENTRY POINT
@@ -549,7 +658,9 @@ def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
 def run_all(debug=False):
     vehicle_id, capacity, dist = load_common_data()
     print(f"Vehicle: {vehicle_id}  |  Capacity: {capacity} m²")
-    print(f"f2 tanımı: w_p = max(0, ta_dp + su_p - ep)  [MILP kısıt (22) ile tutarlı]")
+    print(f"f2 tanımı: w_p = max(0, ta_dp + su_p - ep)  [MILP kısıt (21) ile tutarlı]")
+    print(f"Tie-break: c2 > pressure > c1 > part_index  [pressure = c(h,o_p) - e_p]")
+    print(f"Kapasite kontrolü: simulate() içinde aktif")
     print(f"Output: {OUTPUT_DIR}\n")
 
     for f in FILES:

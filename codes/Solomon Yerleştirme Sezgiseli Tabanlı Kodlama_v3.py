@@ -22,6 +22,7 @@ SHIFT_END   = SHIFT_START + T_MAX
 LAMBDA_C2 = 1.0
 ALPHA1    = 1.0
 ALPHA2    = 0.5
+ALPHA3    = 1.0   # f2 delta agirlik katsayisi
 
 OUTPUT_DIR = os.path.join(INPUT_DIR, "heuristic_results")
 
@@ -160,6 +161,28 @@ def calculate_rt(node, parts, dist):
     return max(term1, term2)
 
 # =========================================================
+# OBJECTIVE COMPUTATION
+# =========================================================
+def compute_f1(sim_result):
+    """f1 = depot_arrival - SHIFT_START"""
+    return sim_result["depot_arrival"] - SHIFT_START
+
+def compute_f2(parts, sim_result):
+    """
+    f2 = Σ max(0, ta_{d_p} + su_p - e_p)
+    MILP kısıt (22) ile birebir aynı tanım.
+    """
+    total_wait = 0.0
+    waits      = {}
+    for p, ta_dp in sim_result["arrivals_to_dest"].items():
+        ep = parts[p]["ready_time"]
+        su = parts[p]["unload_time"]
+        w  = max(0.0, ta_dp + su - ep)
+        waits[p]    = w
+        total_wait += w
+    return total_wait, waits
+
+# =========================================================
 # ROUTE CLASS
 # =========================================================
 class Route:
@@ -282,8 +305,14 @@ class Route:
         if not old_sim["feasible"]: return float("inf")
         new_sim = trial_route.simulate(parts, dist)
         if not new_sim["feasible"]: return float("inf")
+
         local_shift = max(0.0, new_sim["depot_arrival"] - old_sim["depot_arrival"])
-        return ALPHA1 * distance_cost + ALPHA2 * local_shift
+
+        old_f2, _ = compute_f2(parts, old_sim)
+        new_f2, _ = compute_f2(parts, new_sim)
+        delta_f2  = new_f2 - old_f2
+
+        return ALPHA1 * distance_cost + ALPHA2 * local_shift + ALPHA3 * delta_f2
 
     def try_insert(self, pid, parts, dist, debug=False):
         o = parts[pid]["origin"]; d = parts[pid]["destination"]
@@ -346,28 +375,6 @@ class Route:
         elif case == "C":
             self.nodes.insert(spec["i"], parts[pid]["origin"])
         # case D: nodes already present, no change
-
-# =========================================================
-# OBJECTIVE COMPUTATION
-# =========================================================
-def compute_f1(sim_result):
-    """f1 = depot_arrival - SHIFT_START"""
-    return sim_result["depot_arrival"] - SHIFT_START
-
-def compute_f2(parts, sim_result):
-    """
-    f2 = Σ max(0, ta_{d_p} + su_p - e_p)
-    MILP kısıt (22) ile birebir aynı tanım.
-    """
-    total_wait = 0.0
-    waits      = {}
-    for p, ta_dp in sim_result["arrivals_to_dest"].items():
-        ep = parts[p]["ready_time"]
-        su = parts[p]["unload_time"]
-        w  = max(0.0, ta_dp + su - ep)
-        waits[p]    = w
-        total_wait += w
-    return total_wait, waits
 
 # =========================================================
 # MILP-FORMAT VARIABLE EXTRACTION
@@ -452,6 +459,7 @@ def write_milp_format_excel(output_path, file_name, sheet_name,
         "SHIFT_END":           SHIFT_END,
         "ALPHA1":              ALPHA1,
         "ALPHA2":              ALPHA2,
+        "ALPHA3":              ALPHA3,
         "LAMBDA_C2":           LAMBDA_C2,
     }])
 
@@ -550,6 +558,7 @@ def run_all(debug=False):
     vehicle_id, capacity, dist = load_common_data()
     print(f"Vehicle: {vehicle_id}  |  Capacity: {capacity} m²")
     print(f"f2 tanımı: w_p = max(0, ta_dp + su_p - ep)  [MILP kısıt (22) ile tutarlı]")
+    print(f"c1 = ALPHA1*dist + ALPHA2*shift + ALPHA3*delta_f2")
     print(f"Output: {OUTPUT_DIR}\n")
 
     for f in FILES:
