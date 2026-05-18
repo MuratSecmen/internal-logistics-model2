@@ -1,324 +1,420 @@
-"""
-Solomon I1-PDP Heuristic  —  v3
-================================
-Değişiklikler (v1→v3):
-  v2: α₂=0.5, f₂=ta_dp+su_p-ep, temporal-pressure tie-break
-  v3: LST filtresi (erken infeasibility), min_slack robustluk metriği,
-      case1-4 sheet yapısına uyarlandı
-"""
-
 import os
 import copy
-from datetime import datetime, time
-
+from datetime import datetime
 import pandas as pd
 
 # =========================================================
 # CONFIG
 # =========================================================
-DATA_PATH  = r"C:\Users\Asus\Desktop\Er"
-CASES      = ["case1", "case2", "case3", "case4"]
-N_PRODUCTS = None   # None = hepsi, int = ilk N parça
+INPUT_DIR = r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\inputs"
 
-OUTPUT_DIR = os.path.join(
-    r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2"
-    r"\internal-logistics-model2\results",
-    "heuristic_v3"
-)
+FILES = [
+    "products_4part.xlsx",
+    "products_5part.xlsx",
+    "products_6part.xlsx",
+    "products_10part.xlsx",
+]
 
 SHIFT_START = 0
 T_MAX       = 480
 SHIFT_END   = SHIFT_START + T_MAX
 
-ALPHA1    = 1.0
-ALPHA2    = 0.5
 LAMBDA_C2 = 1.0
+
+# Her tuple: (ALPHA1, ALPHA2, ALPHA3, etiket)
+#   ALPHA1 -> mesafe ağırlığı (Δd_ij)
+#   ALPHA2 -> rota süresi ağırlığı (ΔT)
+#   ALPHA3 -> bekleme süresi ağırlığı (ΔW)
+# Üç farklı ağırlık seti ile çalışıp sonuçları karşılaştırıyoruz.
+ALPHA_CONFIGS = [
+    (0.0001, 1.0,  0.01, "f1_bias"),    # rota süresini minimize etmeye odak
+    (0.0001, 0.01, 1.0,  "f2_bias"),    # bekleme süresini minimize etmeye odak
+    (0.0001, 0.5,  0.5,  "balanced"),   # ikisi arasında denge
+]
+
+# True ise üç config de çalışır, her biri ayrı Excel çıktısı üretir.
+# False ise sadece f1_bias çalışır.
+MULTI_DECODE = True
+
+OUTPUT_DIR = r"C:\Users\Asus\Documents\GitHub\internal-logistics-model2\internal-logistics-model2\results\heuristic_result"
 
 # =========================================================
 # HELPERS
 # =========================================================
+def safe_str(v):
+    if pd.isna(v): return ""
+    s = str(v).strip()
+    if s.endswith(".0"): s = s[:-2]
+    return s
+
 def ready_to_min(v):
     if pd.isna(v): return 0
     if isinstance(v, (int, float)): return int(v)
-    if isinstance(v, (pd.Timestamp, datetime)): return v.hour*60 + v.minute
+    if isinstance(v, pd.Timestamp): return int(v.hour)*60 + int(v.minute)
     s = str(v).strip()
     if ":" in s:
         hh, mm = s.split(":"); return int(hh)*60 + int(mm)
     try: return int(float(s))
     except: return 0
 
-def hhmm(minutes):
-    if minutes is None: return ""
-    m = float(minutes)
-    return f"{int(m//60):02d}:{int(m%60):02d}"
+def minutes_to_hhmm(minutes):
+    if minutes is None or (isinstance(minutes, float) and pd.isna(minutes)): return ''
+    minutes = float(minutes)
+    return f"{int(minutes//60):02d}:{int(minutes%60):02d}"
+
+def normalize_columns(df):
+    df = df.copy()
+    df.columns = [
+        str(c).strip().lower().replace("\n", " ").replace("-", "_").replace("  ", " ")
+        for c in df.columns
+    ]
+    return df
+
+def find_first_matching_column(df, candidates):
+    cols = set(df.columns)
+    for cand in candidates:
+        if cand in cols: return cand
+    return None
+
+def find_header_row_and_prepare_df(file_path, sheet_name, max_scan_rows=8):
+    raw = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
+    best_df, best_score = None, -1
+    product_candidates = {"product_id","product id","parça","parca","id","ürün","urun"}
+    origin_candidates  = {"origin","from","kaynak","source","çıkış","cikis"}
+    dest_candidates    = {"destination","to","hedef","dest","varış","varis"}
+    for h in range(min(max_scan_rows, len(raw))):
+        temp  = pd.read_excel(file_path, sheet_name=sheet_name, header=h)
+        temp  = normalize_columns(temp)
+        cols  = set(temp.columns)
+        score = int(bool(cols & product_candidates)) + int(bool(cols & origin_candidates)) + int(bool(cols & dest_candidates))
+        if score > best_score:
+            best_score = score; best_df = temp
+    return best_df
 
 # =========================================================
 # DATA LOADING
 # =========================================================
-def load_common():
-    veh = pd.read_excel(os.path.join(DATA_PATH, "vehicles.xlsx"))
-    veh.columns = [c.strip().lower() for c in veh.columns]
-    vehicle_id = str(veh.iloc[0]["vehicle_id"]).strip()
-    capacity   = float(veh.iloc[0]["capacity_m2"])
+def load_common_data():
+    veh_df  = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "vehicles.xlsx")))
+    dist_df = normalize_columns(pd.read_excel(os.path.join(INPUT_DIR, "distances - dakika.xlsx")))
 
-    dist_df = pd.read_excel(os.path.join(DATA_PATH, "distances - dakika.xlsx"))
-    dist_df.columns = [c.strip().lower() for c in dist_df.columns]
-    dist_df["from_node"] = dist_df["from_node"].astype(str).str.strip()
-    dist_df["to_node"]   = dist_df["to_node"].astype(str).str.strip()
+    vehicle_col = find_first_matching_column(veh_df, ["vehicle_id","vehicle id","arac","araç","vehicle"])
+    cap_col     = find_first_matching_column(veh_df, ["capacity_m2","capacity","kapasite","alan","area_m2"])
+    if vehicle_col is None or cap_col is None:
+        raise ValueError(f"vehicles.xlsx kolonları bulunamadı: {veh_df.columns.tolist()}")
+
+    row = veh_df.iloc[0]
+    vehicle_id = safe_str(row[vehicle_col])
+    capacity   = float(row[cap_col])
+
+    from_col = find_first_matching_column(dist_df, ["from_node","from","kaynak","source"])
+    to_col   = find_first_matching_column(dist_df, ["to_node","to","hedef","destination","dest"])
+    dur_col  = find_first_matching_column(dist_df, ["duration_min","duration","sure","süre","travel_time","travel time"])
+    if from_col is None or to_col is None or dur_col is None:
+        raise ValueError(f"distance kolonları bulunamadı: {dist_df.columns.tolist()}")
+
     dist = {}
     for _, r in dist_df.iterrows():
-        if r["from_node"] != r["to_node"]:
-            dist[(r["from_node"], r["to_node"])] = float(r["duration_min"])
+        i = safe_str(r[from_col]); j = safe_str(r[to_col])
+        if i and j: dist[(i, j)] = float(r[dur_col])
 
     return vehicle_id, capacity, dist
 
-def load_products(case_name):
-    df = pd.read_excel(os.path.join(DATA_PATH, "products.xlsx"), sheet_name=case_name)
-    df.columns = [c.strip().lower() for c in df.columns]
-    df = df.dropna(subset=["product_id"]).drop_duplicates("product_id")
-    df["product_id"]  = df["product_id"].astype(str).str.strip()
-    df["origin"]      = df["origin"].astype(str).str.strip()
-    df["destination"] = df["destination"].astype(str).str.strip()
-    if N_PRODUCTS is not None:
-        df = df.head(N_PRODUCTS)
+def load_products(file_name, sheet_name):
+    file_path = os.path.join(INPUT_DIR, file_name)
+    df = find_header_row_and_prepare_df(file_path, sheet_name)
+    if df is None or df.empty:
+        raise ValueError(f"{file_name}/{sheet_name} okunamadı.")
 
+    pid_col    = find_first_matching_column(df, ["product_id","product id","parça","parca","id","ürün","urun"])
+    origin_col = find_first_matching_column(df, ["origin","from","kaynak","source","çıkış","cikis"])
+    dest_col   = find_first_matching_column(df, ["destination","to","hedef","dest","varış","varis"])
+    ready_col  = find_first_matching_column(df, ["ready_time","ready time","ep","hazır_zaman","hazir_zaman","ready"])
+    load_col   = find_first_matching_column(df, ["load_time","load time","slp","yükleme","yukleme","loading"])
+    unload_col = find_first_matching_column(df, ["unload_time","unload time","sup","boşaltma","bosaltma","unloading"])
+    area_col   = find_first_matching_column(df, ["area_m2","area","qp","m2","alan","surface_area"])
+
+    missing = [k for k, v in {"product_id":pid_col,"origin":origin_col,"destination":dest_col,
+                               "ready_time":ready_col,"load_time":load_col,"unload_time":unload_col,
+                               "area":area_col}.items() if v is None]
+    if missing:
+        raise ValueError(f"{file_name}/{sheet_name} eksik kolonlar: {missing}. Bulunan: {df.columns.tolist()}")
+
+    df = df.dropna(subset=[pid_col, origin_col, dest_col])
     parts = {}
     for _, r in df.iterrows():
-        pid = r["product_id"]
+        pid = safe_str(r[pid_col])
         if not pid: continue
         parts[pid] = {
-            "origin":      r["origin"],
-            "destination": r["destination"],
-            "ready_time":  ready_to_min(r["ready_time"]),
-            "load_time":   float(r["load_time"]),
-            "unload_time": float(r["unload_time"]),
-            "area":        float(r["area_m2"]),
+            "origin":      safe_str(r[origin_col]),
+            "destination": safe_str(r[dest_col]),
+            "ready_time":  ready_to_min(r[ready_col]),
+            "load_time":   float(r[load_col]),
+            "unload_time": float(r[unload_col]),
+            "area":        float(r[area_col]),
         }
     return parts
 
 # =========================================================
-# RT(n) — earliest feasible service-start at node n
+# RT(n)  —  n düğümünde servisin en erken başlayabileceği zaman
 # =========================================================
-def rt(node, parts, dist):
-    t1, t2 = 0.0, 0.0
+def calculate_rt(node, parts, dist):
+    term1 = 0.0
+    term2 = 0.0
     for p, data in parts.items():
         if data["origin"] == node:
-            t1 = max(t1, max(data["ready_time"], dist.get(("h", node), 0.0)))
+            term1 = max(term1, max(data["ready_time"], dist.get(("h", node), 0.0)))
+    for p, data in parts.items():
         if data["destination"] == node:
             o = data["origin"]
-            cand = (max(data["ready_time"], dist.get(("h", o), 0.0))
-                    + data["load_time"] + dist.get((o, node), 0.0))
-            t2 = max(t2, cand)
-    return max(t1, t2)
+            candidate = (max(data["ready_time"], dist.get(("h", o), 0.0))
+                         + data["load_time"] + dist.get((o, node), 0.0))
+            term2 = max(term2, candidate)
+    return max(term1, term2)
 
 # =========================================================
-# LST(n) — latest feasible service-start at node n      [v3]
+# ZAMANSAL BASKI SKORU  (c2 tie-breaker)
 # =========================================================
-def lst(node, parts, dist):
+def calculate_temporal_pressure(pid, parts, dist):
     """
-    LST(n) = SHIFT_END − max_{p ∈ touches(n)} remaining(n,p)
+    Parça başına zamansal baskı skoru: pressure(p) = c(h, o_p) - e_p
 
-    remaining(n,p):
-      • n = o_p  →  sl_p + c(o_p,d_p) + su_p + c(d_p,h)
-      • n = d_p  →  su_p + c(d_p,h)
-      • geçiş    →  c(n,h)
+    Yorumu:
+      • pressure > 0:  Araç o_p'ye vardığında parça çoktan hazır olmuş,
+                       bekliyor olacak. f2'ye katkı riski yüksek → ÖNCELİKLİ.
+      • pressure = 0:  Mükemmel senkronizasyon.
+      • pressure < 0:  Araç oraya parça hazır olmadan ulaşabilir; parça
+                       beklemez, araç bekler. Sonraya bırakılabilir.
 
-    ts_n > LST(n)  ⇒  kesin infeasible (erken sonlandırma)
-    ts_n ≤ LST(n)  ⇒  muhtemelen feasible (depo dönüş kontrolü hâlâ gerekli)
+    Not: Bu bir alt sınır değil, sıralama için heuristik bir öncelik skorudur.
     """
-    if node == "h": return SHIFT_END
-    max_rem = dist.get((node, "h"), 0.0)
-    for p, data in parts.items():
-        if data["origin"] == node:
-            rem = (data["load_time"]
-                   + dist.get((data["origin"], data["destination"]), 0.0)
-                   + data["unload_time"]
-                   + dist.get((data["destination"], "h"), 0.0))
-            max_rem = max(max_rem, rem)
-        if data["destination"] == node:
-            rem = data["unload_time"] + dist.get((node, "h"), 0.0)
-            max_rem = max(max_rem, rem)
-    return SHIFT_END - max_rem
+    d = parts[pid]
+    return dist.get(("h", d["origin"]), 0.0) - d["ready_time"]
 
 # =========================================================
-# Temporal pressure (tie-breaker)                        [v2]
-# =========================================================
-def temporal_pressure(pid, parts, dist):
-    return dist.get(("h", parts[pid]["origin"]), 0.0) - parts[pid]["ready_time"]
-
-# =========================================================
-# ROUTE
+# ROUTE CLASS
 # =========================================================
 class Route:
-    def __init__(self, vehicle_id, capacity):
+    def __init__(self, vehicle_id, capacity, start_time):
         self.vehicle_id = vehicle_id
         self.capacity   = capacity
-        self.nodes      = ["h", "h"]
+        self.start_time = start_time
+        self.nodes      = ["h", "h"]   # başlangıç: boş rota, sadece depo
         self.parts      = set()
 
     def customer_nodes(self):
+        # İlk ve son depo düğümlerini hariç tut
         return self.nodes[1:-1]
 
-    def node_pos(self, node):
-        for i in range(1, len(self.nodes)-1):
-            if self.nodes[i] == node: return i
+    def node_position(self, node):
+        # Rotada düğümün pozisyonunu döndürür, yoksa -1
+        for idx in range(1, len(self.nodes) - 1):
+            if self.nodes[idx] == node: return idx
         return -1
 
-    # ── Simulate ──────────────────────────────────────────────────────
-    def simulate(self, parts, dist):
-        pickups    = {n: [] for n in self.customer_nodes()}
-        deliveries = {n: [] for n in self.customer_nodes()}
+    def build_node_events(self, parts):
+        # Her düğümde hangi parçaların yüklenip boşaltılacağını hazırla
+        node_pickups    = {n: [] for n in self.customer_nodes()}
+        node_deliveries = {n: [] for n in self.customer_nodes()}
         for p in self.parts:
-            o, d = parts[p]["origin"], parts[p]["destination"]
-            if o in pickups:    pickups[o].append(p)
-            if d in deliveries: deliveries[d].append(p)
+            o = parts[p]["origin"]; d = parts[p]["destination"]
+            if o in node_pickups:    node_pickups[o].append(p)
+            if d in node_deliveries: node_deliveries[d].append(p)
+        return node_pickups, node_deliveries
 
-        td_prev = SHIFT_START
-        prev    = "h"
-        load    = 0.0
+    def simulate(self, parts, dist):
+        """
+        Rotayı baştan sona simüle eder; her düğümde varış/servis/ayrılış
+        zamanlarını, yükü ve feasibility durumunu hesaplar.
+        """
+        prev_node = "h"
+        td_prev   = self.start_time
+        current_load = 0.0
         timeline = []
-        arrivals = {}
-        min_slack      = float("inf")
-        min_slack_node = None
+        arrivals_to_dest = {}
+        node_pickups, node_deliveries = self.build_node_events(parts)
 
         for n in self.customer_nodes():
-            ta_n = td_prev + dist.get((prev, n), 0.0)
-            unload = sum(parts[p]["unload_time"] for p in sorted(deliveries.get(n,[])))
-            load_t = sum(parts[p]["load_time"]   for p in sorted(pickups.get(n,[])))
-            rt_n   = rt(n, parts, dist)
-            ts_n   = max(ta_n, rt_n)
+            ta_n = td_prev + dist.get((prev_node, n), 0.0)
+            pickups_here    = sorted(node_pickups.get(n, []))
+            deliveries_here = sorted(node_deliveries.get(n, []))
+            unload_total = sum(parts[p]["unload_time"] for p in deliveries_here)
+            load_total   = sum(parts[p]["load_time"]   for p in pickups_here)
+            rt_n = calculate_rt(n, parts, dist)
+            ts_n = max(ta_n, rt_n)           # servise başlama: varış veya hazır zamanın büyüğü
+            td_n = ts_n + unload_total + load_total
 
-            # LST filtresi [v3]
-            lst_n   = lst(n, parts, dist)
-            slack_n = lst_n - ts_n
-            if slack_n < -1e-9:
-                return {"feasible": False, "reason": "lst_overflow",
-                        "node": n, "ts": ts_n, "lst": lst_n, "slack": slack_n,
-                        "timeline": timeline}
-            if slack_n < min_slack:
-                min_slack = slack_n; min_slack_node = n
+            current_load -= sum(parts[p]["area"] for p in deliveries_here)
+            current_load += sum(parts[p]["area"] for p in pickups_here)
 
-            td_n  = ts_n + unload + load_t
-            load -= sum(parts[p]["area"] for p in deliveries.get(n,[]))
-            load += sum(parts[p]["area"] for p in pickups.get(n,[]))
+            # Kapasite kontrolü: araçtan fazla yük binmemeli
+            if current_load > self.capacity + 1e-9:
+                return {
+                    "feasible": False,
+                    "reason":   "capacity",
+                    "node":     n,
+                    "load":     round(current_load, 4),
+                    "capacity": self.capacity,
+                    "timeline": timeline
+                }
 
-            if load > self.capacity + 1e-9:
-                return {"feasible": False, "reason": "capacity",
-                        "node": n, "load": round(load,4), "capacity": self.capacity,
-                        "timeline": timeline}
+            for p in deliveries_here:
+                arrivals_to_dest[p] = ta_n   # bu parçanın teslimat düğümüne varış zamanı
 
-            for p in deliveries.get(n,[]): arrivals[p] = ta_n
-
-            stype = "+".join(filter(None,[
-                "Delivery" if deliveries.get(n) else "",
-                "Pickup"   if pickups.get(n)    else ""]))
+            service_type = []
+            if deliveries_here: service_type.append("Delivery")
+            if pickups_here:    service_type.append("Pickup")
+            service_type = "+".join(service_type) if service_type else "None"
 
             timeline.append({
-                "node": n, "service_type": stype or "None",
+                "node": n, "service_type": service_type,
                 "ta": ta_n, "rt": rt_n, "ts": ts_n, "td": td_n,
-                "lst": lst_n, "slack": slack_n,
                 "node_wait": ts_n - ta_n,
-                "unload_total": unload, "load_total": load_t,
-                "load": load,
-                "pickups":    ",".join(sorted(pickups.get(n,[]))),
-                "deliveries": ",".join(sorted(deliveries.get(n,[]))),
+                "unload_total": unload_total, "load_total": load_total,
+                "service_total": unload_total + load_total,
+                "load": current_load,
+                "pickups": ",".join(pickups_here),
+                "deliveries": ",".join(deliveries_here),
             })
-            td_prev = td_n; prev = n
+            td_prev = td_n; prev_node = n
 
-        depot_arr = td_prev + dist.get((prev, "h"), 0.0)
-        if depot_arr > SHIFT_END + 1e-9:
+        depot_arrival = td_prev + dist.get((prev_node, "h"), 0.0)
+
+        # Vardiya sonu kontrolü
+        if depot_arrival > SHIFT_END + 1e-9:
             return {"feasible": False, "reason": "shift",
-                    "depot_arrival": depot_arr, "limit": SHIFT_END, "timeline": timeline}
+                    "depot_arrival": depot_arrival, "limit": SHIFT_END, "timeline": timeline}
 
+        # Öncelik kontrolü: her parçanın origin'inden önce destination'a gidilmemeli
         dep_map = {t["node"]: t["td"] for t in timeline}
         arr_map = {t["node"]: t["ta"] for t in timeline}
         for p in self.parts:
-            o, d = parts[p]["origin"], parts[p]["destination"]
+            o = parts[p]["origin"]; d = parts[p]["destination"]
             if o not in dep_map or d not in arr_map:
                 return {"feasible": False, "reason": "missing_visit", "part": p}
             if arr_map[d] + 1e-9 < dep_map[o]:
-                return {"feasible": False, "reason": "precedence", "part": p}
+                return {"feasible": False, "reason": "precedence", "part": p,
+                        "origin": o, "destination": d}
 
-        # next_node bilgilerini timeline'a ekle
-        for i, row in enumerate(timeline):
-            nxt_node = timeline[i+1]["node"] if i < len(timeline)-1 else "h"
-            nxt_arr  = timeline[i+1]["ta"]   if i < len(timeline)-1 else depot_arr
-            row["next_node"] = nxt_node; row["next_arrival"] = nxt_arr
-            row["travel_to_next"] = nxt_arr - row["td"]
+        # Sonraki düğüme seyahat bilgisini ekle (raporlama için)
+        for idx in range(len(timeline)):
+            if idx < len(timeline) - 1:
+                next_node    = timeline[idx+1]["node"]
+                next_arrival = timeline[idx+1]["ta"]
+            else:
+                next_node    = "h"
+                next_arrival = depot_arrival
+            timeline[idx]["next_node"]       = next_node
+            timeline[idx]["next_arrival"]    = next_arrival
+            timeline[idx]["travel_to_next"]  = next_arrival - timeline[idx]["td"]
 
         return {"feasible": True, "timeline": timeline,
-                "arrivals_to_dest": arrivals,
-                "depot_arrival": depot_arr,
-                "min_slack": min_slack if min_slack < float("inf") else None,
-                "min_slack_node": min_slack_node}
+                "arrivals_to_dest": arrivals_to_dest, "depot_arrival": depot_arrival}
 
-    # ── c1 cost ───────────────────────────────────────────────────────
-    def _dist_inc_two(self, i, j, o, d, dist):
+    def _calc_distance_increase_insert_two(self, i, j, o, d, dist):
+        """
+        İki düğüm (o ve d) aynı anda eklendiğinde toplam mesafe artışı.
+        Önce o'yu i'ye, sonra d'yi j'ye eklemenin marjinal maliyeti.
+        """
         r = self.nodes
-        d_o = (dist.get((r[i-1],o),0) + dist.get((o,r[i]),0) - dist.get((r[i-1],r[i]),0))
-        tmp = r[:i] + [o] + r[i:]
-        d_d = (dist.get((tmp[j-1],d),0) + dist.get((d,tmp[j]),0) - dist.get((tmp[j-1],tmp[j]),0))
-        return d_o + d_d
+        delta_o = (dist.get((r[i-1], o), 0.0) + dist.get((o, r[i]), 0.0)
+                   - dist.get((r[i-1], r[i]), 0.0))
+        tmp     = r[:i] + [o] + r[i:]
+        delta_d = (dist.get((tmp[j-1], d), 0.0) + dist.get((d, tmp[j]), 0.0)
+                   - dist.get((tmp[j-1], tmp[j]), 0.0))
+        return delta_o + delta_d
 
-    def _dist_inc_one(self, pos, node, dist):
+    def _calc_distance_increase_insert_one(self, pos, node, dist):
+        """Tek düğüm eklendiğinde mesafe artışı."""
         r = self.nodes
-        return dist.get((r[pos-1],node),0) + dist.get((node,r[pos]),0) - dist.get((r[pos-1],r[pos]),0)
+        return (dist.get((r[pos-1], node), 0.0) + dist.get((node, r[pos]), 0.0)
+                - dist.get((r[pos-1], r[pos]), 0.0))
 
-    def c1(self, trial, dist_cost, parts, dist):
-        old = self.simulate(parts, dist)
-        new = trial.simulate(parts, dist)
-        if not old["feasible"] or not new["feasible"]: return float("inf")
-        shift = max(0.0, new["depot_arrival"] - old["depot_arrival"])
-        return ALPHA1*dist_cost + ALPHA2*shift
+    def calc_c1(self, trial_route, distance_cost, parts, dist, alpha1=None, alpha2=None, alpha3=None):
+        """
+        c1 insertion cost: alpha1*Δd + alpha2*ΔT + alpha3*ΔW
+          Δd  = mesafe artışı
+          ΔT  = rota süresi artışı (f1'deki değişim)
+          ΔW  = toplam bekleme artışı (f2'deki değişim)
+        Hangi hedefe odaklanmak istediğimize göre alpha'lar ayarlanır.
+        """
+        if alpha1 is None:
+            alpha1, alpha2, alpha3, _ = ALPHA_CONFIGS[0]
+        old_sim = self.simulate(parts, dist)
+        if not old_sim["feasible"]: return float("inf")
+        new_sim = trial_route.simulate(parts, dist)
+        if not new_sim["feasible"]: return float("inf")
 
-    # ── Best insertion ────────────────────────────────────────────────
-    def try_insert(self, pid, parts, dist):
-        o, d = parts[pid]["origin"], parts[pid]["destination"]
-        o_pos, d_pos = self.node_pos(o), self.node_pos(d)
-        best_cost, best_spec = float("inf"), None
+        old_f1  = old_sim["depot_arrival"] - self.start_time
+        new_f1  = new_sim["depot_arrival"] - self.start_time
+        delta_T = max(0.0, new_f1 - old_f1)
 
-        # Case D: both present
-        if o_pos >= 0 and d_pos >= 0:
+        old_f2 = sum(max(0.0, old_sim["arrivals_to_dest"].get(p, 0)
+                         + parts[p]["unload_time"] - parts[p]["ready_time"])
+                     for p in old_sim["arrivals_to_dest"])
+        new_f2 = sum(max(0.0, new_sim["arrivals_to_dest"].get(p, 0)
+                         + parts[p]["unload_time"] - parts[p]["ready_time"])
+                     for p in new_sim["arrivals_to_dest"])
+        delta_W = new_f2 - old_f2
+
+        return alpha1 * distance_cost + alpha2 * delta_T + alpha3 * delta_W
+
+    def try_insert(self, pid, parts, dist, alpha1=None, alpha2=None, alpha3=None, debug=False):
+        """
+        Parçayı rotaya eklemenin en ucuz feasible pozisyonunu bulur.
+        Dört durum mümkün:
+          A: origin ve destination her ikisi de rotada yok  → ikisini birden ekle
+          B: origin var, destination yok                    → sadece destination ekle
+          C: destination var, origin yok                    → sadece origin ekle
+          D: ikisi de zaten var                             → sadece parçayı kaydet
+        """
+        if alpha1 is None:
+            alpha1, alpha2, alpha3, _ = ALPHA_CONFIGS[0]
+        o = parts[pid]["origin"]; d = parts[pid]["destination"]
+        o_pos = self.node_position(o); d_pos = self.node_position(d)
+        best_cost = float("inf"); best_spec = None
+
+        if o_pos >= 0 and d_pos >= 0:                       # Durum D
             if o_pos < d_pos:
                 trial = copy.deepcopy(self); trial.parts.add(pid)
-                if trial.simulate(parts, dist)["feasible"]:
-                    return 0.0, {"case":"D"}
-            return float("inf"), None
+                sim = trial.simulate(parts, dist)
+                if sim["feasible"]:
+                    best_cost = 0.0; best_spec = {"case": "D"}
+            return best_cost, best_spec
 
-        # Case A: both absent
-        if o_pos < 0 and d_pos < 0:
+        if o_pos < 0 and d_pos < 0:                         # Durum A
             for i in range(1, len(self.nodes)):
                 for j in range(i+1, len(self.nodes)+1):
                     trial = copy.deepcopy(self)
-                    trial.nodes.insert(i, o); trial.nodes.insert(j, d)
-                    trial.parts.add(pid)
-                    if not trial.simulate(parts, dist)["feasible"]: continue
-                    dc = self._dist_inc_two(i, j, o, d, dist)
-                    c  = self.c1(trial, dc, parts, dist)
-                    if c < best_cost:
-                        best_cost = c; best_spec = {"case":"A","i":i,"j":j}
+                    trial.nodes.insert(i, o); trial.nodes.insert(j, d); trial.parts.add(pid)
+                    sim = trial.simulate(parts, dist)
+                    if not sim["feasible"]: continue
+                    dist_cost = self._calc_distance_increase_insert_two(i, j, o, d, dist)
+                    c1 = self.calc_c1(trial, dist_cost, parts, dist, alpha1, alpha2, alpha3)
+                    if c1 < best_cost:
+                        best_cost = c1; best_spec = {"case": "A", "i": i, "j": j}
             return best_cost, best_spec
 
-        # Case B: origin present, insert dest
-        if o_pos >= 0 and d_pos < 0:
+        if o_pos >= 0 and d_pos < 0:                        # Durum B
             for j in range(o_pos+1, len(self.nodes)+1):
                 trial = copy.deepcopy(self); trial.nodes.insert(j, d); trial.parts.add(pid)
-                if not trial.simulate(parts, dist)["feasible"]: continue
-                dc = self._dist_inc_one(j, d, dist)
-                c  = self.c1(trial, dc, parts, dist)
-                if c < best_cost:
-                    best_cost = c; best_spec = {"case":"B","j":j}
+                sim = trial.simulate(parts, dist)
+                if not sim["feasible"]: continue
+                dist_cost = self._calc_distance_increase_insert_one(j, d, dist)
+                c1 = self.calc_c1(trial, dist_cost, parts, dist, alpha1, alpha2, alpha3)
+                if c1 < best_cost:
+                    best_cost = c1; best_spec = {"case": "B", "j": j}
             return best_cost, best_spec
 
-        # Case C: dest present, insert origin
-        if o_pos < 0 and d_pos >= 0:
+        if o_pos < 0 and d_pos >= 0:                        # Durum C
             for i in range(1, d_pos+1):
                 trial = copy.deepcopy(self); trial.nodes.insert(i, o); trial.parts.add(pid)
-                if not trial.simulate(parts, dist)["feasible"]: continue
-                dc = self._dist_inc_one(i, o, dist)
-                c  = self.c1(trial, dc, parts, dist)
-                if c < best_cost:
-                    best_cost = c; best_spec = {"case":"C","i":i}
+                sim = trial.simulate(parts, dist)
+                if not sim["feasible"]: continue
+                dist_cost = self._calc_distance_increase_insert_one(i, o, dist)
+                c1 = self.calc_c1(trial, dist_cost, parts, dist, alpha1, alpha2, alpha3)
+                if c1 < best_cost:
+                    best_cost = c1; best_spec = {"case": "C", "i": i}
             return best_cost, best_spec
 
         return best_cost, best_spec
@@ -333,199 +429,443 @@ class Route:
             self.nodes.insert(spec["j"], parts[pid]["destination"])
         elif case == "C":
             self.nodes.insert(spec["i"], parts[pid]["origin"])
+        # case D: düğümler zaten rotada, ek işlem yok
 
 # =========================================================
-# OBJECTIVES
+# 2-OPT LOCAL SEARCH
 # =========================================================
-def f1(sim): return sim["depot_arrival"] - SHIFT_START
+def two_opt(route, parts, dist, alpha1, alpha2, alpha3):
+    """
+    İnşaat sonrası çapraz yayları düzelterek rotayı iyileştirir.
 
-def f2(parts, sim):
-    waits, total = {}, 0.0
-    for p, ta_dp in sim["arrivals_to_dest"].items():
-        w = max(0.0, ta_dp + parts[p]["unload_time"] - parts[p]["ready_time"])
-        waits[p] = w; total += w
-    return total, waits
+    Fikir: rotadaki i+1..j segmentini tersine çevir; eğer skor düşüyorsa kabul et.
+    Feasibility bozuluyorsa (öncelik, kapasite, vardiya) bu swap atlanır.
+    İyileşme kalmayınca durur (first-improvement: ilk iyi swap'ta sıfırdan tarar).
+    """
+    improved = True
+    while improved:
+        improved = False
+        sim_curr = route.simulate(parts, dist)
+        if not sim_curr["feasible"]:
+            break
+
+        # Alpha-ağırlıklı bileşik skor: alpha2*f1 + alpha3*f2
+        curr_f1 = sim_curr["depot_arrival"] - route.start_time
+        curr_f2 = sum(max(0.0, sim_curr["arrivals_to_dest"].get(p, 0)
+                          + parts[p]["unload_time"] - parts[p]["ready_time"])
+                      for p in sim_curr["arrivals_to_dest"])
+        curr_score = alpha2 * curr_f1 + alpha3 * curr_f2
+
+        n = len(route.nodes)
+        for i in range(1, n - 2):          # i >= 1: ilk depo hariç
+            for j in range(i + 2, n - 1):  # j <= n-2: son depo hariç, en az 2 boşluk
+                trial = copy.deepcopy(route)
+                trial.nodes[i+1:j+1] = trial.nodes[i+1:j+1][::-1]   # segmenti tersine çevir
+                sim_trial = trial.simulate(parts, dist)
+                if not sim_trial["feasible"]:
+                    continue
+                trial_f1 = sim_trial["depot_arrival"] - trial.start_time
+                trial_f2 = sum(max(0.0, sim_trial["arrivals_to_dest"].get(p, 0)
+                                   + parts[p]["unload_time"] - parts[p]["ready_time"])
+                               for p in sim_trial["arrivals_to_dest"])
+                trial_score = alpha2 * trial_f1 + alpha3 * trial_f2
+                if trial_score < curr_score - 1e-9:
+                    route = trial
+                    improved = True
+                    break
+            if improved:
+                break
+    return route
 
 # =========================================================
-# EXCEL OUTPUT (12 sheets, MILP-format)
+# OR-OPT-ON-PAIRS LOCAL SEARCH
 # =========================================================
-def write_excel(path, case_name, route, parts, dist, sim, vehicle_id, f1_val, f2_val):
-    k, r = vehicle_id, 1
-    tl   = sim["timeline"]
-    seq  = route.nodes
-    _, waits = f2(parts, sim)
+def or_opt_on_pairs(route, parts, dist, alpha1, alpha2, alpha3):
+    """
+    Parça bazlı yeniden yerleştirme: her p için (o_p, d_p) çiftini
+    rotadan söküp tüm geçerli (i, j) pozisyonlarına yeniden ekler.
 
-    x_rows = [{"var":"x","i":seq[i],"j":seq[i+1],"k":k,"r":r,"val":1}
-               for i in range(len(seq)-1)]
-    f_rows = [{"var":"f","p":p,"k":k,"r":r,"val":1} for p in sorted(route.parts)]
-    u_rows = [{"var":"u","j":row["node"],"k":k,"r":r,"u":idx} for idx,row in enumerate(tl,1)]
-    z_rows = [{"var":"z","k":k,"r":r,"z":1 if tl else 0}]
-    w_rows = [{"var":"w","p":p,"k":k,"r":r,"w_val":waits.get(p,0.0),
-               "ta_dp":sim["arrivals_to_dest"].get(p),"su_p":parts[p]["unload_time"],
-               "ep":parts[p]["ready_time"]} for p in sorted(route.parts)]
+    2-opt'un yakalayamadığı erken açgözlü hataları düzeltir; özellikle
+    yanlış sıraya girmiş parçaları doğru yere taşır.
+    First-improvement: ilk iyileşmede sıfırdan tara.
+    """
+    improved = True
+    while improved:
+        improved = False
+        sim_curr = route.simulate(parts, dist)
+        if not sim_curr["feasible"]:
+            break
 
-    ta_rows = [{"var":"ta","node":"h","k":k,"r":r,
-                "time":sim["depot_arrival"],"stamp":hhmm(sim["depot_arrival"])}]
-    td_rows = [{"var":"td","node":"h","k":k,"r":r,
-                "time":SHIFT_START,"stamp":hhmm(SHIFT_START)}]
-    ts_rows = []
-    for row in tl:
+        curr_f1 = sim_curr["depot_arrival"] - route.start_time
+        curr_f2 = sum(max(0.0, sim_curr["arrivals_to_dest"].get(p, 0)
+                          + parts[p]["unload_time"] - parts[p]["ready_time"])
+                      for p in sim_curr["arrivals_to_dest"])
+        curr_score = alpha2 * curr_f1 + alpha3 * curr_f2
+
+        for p in sorted(route.parts):
+            o = parts[p]["origin"]
+            d = parts[p]["destination"]
+
+            # o ve d'yi rotadan çıkar; kalan rota = "base"
+            base = copy.deepcopy(route)
+            base.nodes = [n for n in base.nodes if n != o and n != d]
+            base.parts.discard(p)
+
+            best_trial_score = curr_score
+            best_trial_route = None
+
+            # base rotadaki tüm (i, j) çiftlerine yeniden yerleştirmeyi dene
+            m = len(base.nodes)
+            for i in range(1, m):
+                for j in range(i + 1, m + 1):
+                    trial = copy.deepcopy(base)
+                    trial.nodes.insert(i, o)
+                    trial.nodes.insert(j, d)
+                    trial.parts.add(p)
+                    sim_trial = trial.simulate(parts, dist)
+                    if not sim_trial["feasible"]:
+                        continue
+                    trial_f1 = sim_trial["depot_arrival"] - trial.start_time
+                    trial_f2 = sum(max(0.0, sim_trial["arrivals_to_dest"].get(q, 0)
+                                       + parts[q]["unload_time"] - parts[q]["ready_time"])
+                                   for q in sim_trial["arrivals_to_dest"])
+                    trial_score = alpha2 * trial_f1 + alpha3 * trial_f2
+                    if trial_score < best_trial_score - 1e-9:
+                        best_trial_score = trial_score
+                        best_trial_route = trial
+
+            if best_trial_route is not None:
+                route = best_trial_route
+                improved = True
+                break   # iyileşme bulundu, tüm parçaları sıfırdan tara
+
+    return route
+
+# =========================================================
+# OBJECTIVE COMPUTATION
+# =========================================================
+def compute_f1(sim_result):
+    """f1 = toplam rota süresi (depodan depoya)"""
+    return sim_result["depot_arrival"] - SHIFT_START
+
+def compute_f2(parts, sim_result):
+    """
+    f2 = sum( max(0, ta_{d_p} + su_p - e_p) )
+    Her parça için teslimat noktasına varış + boşaltma süresi, ready_time'ı
+    ne kadar aşıyor? Aşım = o parçanın bekleme maliyeti.
+    """
+    total_wait = 0.0
+    waits      = {}
+    for p, ta_dp in sim_result["arrivals_to_dest"].items():
+        ep = parts[p]["ready_time"]
+        su = parts[p]["unload_time"]
+        w  = max(0.0, ta_dp + su - ep)
+        waits[p]    = w
+        total_wait += w
+    return total_wait, waits
+
+# =========================================================
+# MILP-FORMAT VARIABLE EXTRACTION
+# =========================================================
+def extract_milp_vars(route, parts, dist, sim, k, r=1):
+    timeline  = sim["timeline"]
+    nodes_seq = route.nodes
+
+    f2_total, waits = compute_f2(parts, sim)
+
+    x_list = [{"var":"x","i":nodes_seq[idx],"j":nodes_seq[idx+1],"k":k,"r":r,"val":1}
+               for idx in range(len(nodes_seq)-1)]
+
+    f_list = [{"var":"f","p":p,"k":k,"r":r,"val":1} for p in sorted(route.parts)]
+
+    u_list = [{"var":"u","j":row["node"],"k":k,"r":r,"u":idx}
+               for idx, row in enumerate(timeline, 1)]
+
+    z_list = [{"var":"z","k":k,"r":r,"z":1 if timeline else 0}]
+
+    w_list = [{"var":"w","p":p,"k":k,"r":r,
+               "w_val": waits.get(p, 0.0),
+               "ta_dp": sim["arrivals_to_dest"].get(p, None),
+               "su_p":  parts[p]["unload_time"],
+               "ep":    parts[p]["ready_time"]}
+              for p in sorted(route.parts)]
+
+    ta_list = [{"var":"ta","node":"h","k":k,"r":r,
+                "time":sim["depot_arrival"],"stamp":minutes_to_hhmm(sim["depot_arrival"])}]
+    td_list = [{"var":"td","node":"h","k":k,"r":r,
+                "time":route.start_time,"stamp":minutes_to_hhmm(route.start_time)}]
+    ts_list = []
+    for row in timeline:
         n = row["node"]
-        ta_rows.append({"var":"ta","node":n,"k":k,"r":r,"time":row["ta"],"stamp":hhmm(row["ta"])})
-        td_rows.append({"var":"td","node":n,"k":k,"r":r,"time":row["td"],"stamp":hhmm(row["td"])})
-        ts_rows.append({"var":"ts","node":n,"k":k,"r":r,"time":row["ts"],"stamp":hhmm(row["ts"])})
+        ta_list.append({"var":"ta","node":n,"k":k,"r":r,"time":row["ta"],"stamp":minutes_to_hhmm(row["ta"])})
+        td_list.append({"var":"td","node":n,"k":k,"r":r,"time":row["td"],"stamp":minutes_to_hhmm(row["td"])})
+        ts_list.append({"var":"ts","node":n,"k":k,"r":r,"time":row["ts"],"stamp":minutes_to_hhmm(row["ts"])})
 
-    y_rows = [{"var":"y","node":"h","k":k,"r":r,"y_val":0.0}]
-    for row in tl: y_rows.append({"var":"y","node":row["node"],"k":k,"r":r,"y_val":row["load"]})
+    y_list = [{"var":"y","node":"h","k":k,"r":r,"y_val":0.0}]
+    for row in timeline:
+        y_list.append({"var":"y","node":row["node"],"k":k,"r":r,"y_val":row["load"]})
 
-    d_rows = [{"var":"delta","node":row["node"],"k":k,"r":r,
-               "delta_val": sum(parts[p]["area"] for p in route.parts if parts[p]["origin"]==row["node"])
-                           - sum(parts[p]["area"] for p in route.parts if parts[p]["destination"]==row["node"])}
-              for row in tl]
+    node_pickup_area   = {n: sum(parts[p]["area"] for p in route.parts if parts[p]["origin"]==n)
+                           for n in route.customer_nodes()}
+    node_delivery_area = {n: sum(parts[p]["area"] for p in route.parts if parts[p]["destination"]==n)
+                           for n in route.customer_nodes()}
+    delta_list = [{"var":"delta","node":row["node"],"k":k,"r":r,
+                   "delta_val": node_pickup_area.get(row["node"],0.0) - node_delivery_area.get(row["node"],0.0)}
+                  for row in timeline]
 
-    itin = [{"k":k,"r":r,"j":row["node"],"u":idx,
-              "ta_stamp":hhmm(row["ta"]),"ts_stamp":hhmm(row["ts"]),"td_stamp":hhmm(row["td"]),
-              "lst":row["lst"],"slack":row["slack"],"y_after":row["load"]}
-             for idx, row in enumerate(tl, 1)]
+    itinerary_list = [{"k":k,"r":r,"j":row["node"],"u":idx,
+                        "ta_stamp":minutes_to_hhmm(row["ta"]),
+                        "td_stamp":minutes_to_hhmm(row["td"]),
+                        "y_after":row["load"]}
+                       for idx, row in enumerate(timeline, 1)]
 
-    opt = pd.DataFrame([{
-        "model":"heuristic_solomon_i1_pdp_v3",
-        "case": case_name,
-        "f1_route_time": f1_val, "f2_total_wait": f2_val,
-        "f2_definition": "sum(max(0, ta_dp + su_p - ep))",
-        "depot_arrival": sim["depot_arrival"],
-        "depot_arrival_stamp": hhmm(sim["depot_arrival"]),
-        "min_slack": sim.get("min_slack"),
-        "min_slack_node": sim.get("min_slack_node"),
-        "status": "HEURISTIC",
-        "|P|": len(parts),
-        "ALPHA1": ALPHA1, "ALPHA2": ALPHA2, "LAMBDA_C2": LAMBDA_C2,
-        "tie_break_rule": "c2 > pressure > c1 > part_index",
-        "lst_filter": "active",
+    return {"x":x_list,"f":f_list,"u":u_list,"z":z_list,"w":w_list,
+            "ta":ta_list,"td":td_list,"ts":ts_list,"y":y_list,
+            "delta":delta_list,"itinerary":itinerary_list}
+
+# =========================================================
+# EXCEL WRITER
+# =========================================================
+def write_milp_format_excel(output_path, file_name, sheet_name,
+                             route, parts, dist, sim, vehicle_id, f1, f2,
+                             alpha_label="f1_bias"):
+    k = vehicle_id; r = 1
+    vars_ = extract_milp_vars(route, parts, dist, sim, k=k, r=r)
+
+    df_opt = pd.DataFrame([{
+        "model":               "heuristic_solomon_i1_pdp_v3",
+        "alpha_config":        alpha_label,
+        "f1_route_time":       f1,
+        "f2_total_wait":       f2,
+        "f2_definition":       "sum(max(0, ta_dp + su_p - ep))",
+        "depot_arrival":       sim["depot_arrival"],
+        "depot_arrival_stamp": minutes_to_hhmm(sim["depot_arrival"]),
+        "status":              "HEURISTIC",
+        "instance_file":       file_name,
+        "instance_sheet":      sheet_name,
+        "|P|":                 len(parts),
+        "|Nw|":                len(set(route.customer_nodes())),
+        "SHIFT_START":         SHIFT_START,
+        "SHIFT_END":           SHIFT_END,
+        "LAMBDA_C2":           LAMBDA_C2,
+        "vehicle_capacity":    route.capacity,
+        "tie_break_rule":      "c2 -> pressure -> c1 -> part_index",
+        "local_search":        "2-opt + or-opt-on-pairs",
     }])
 
-    with pd.ExcelWriter(path, engine="openpyxl") as wr:
-        opt.to_excel(wr, sheet_name="optimization_results", index=False)
-        pd.DataFrame(x_rows).to_excel(wr, sheet_name="x_ijkr", index=False)
-        pd.DataFrame(f_rows).to_excel(wr, sheet_name="f_pkr", index=False)
-        pd.DataFrame(u_rows).to_excel(wr, sheet_name="u_jkr", index=False)
-        pd.DataFrame(z_rows).to_excel(wr, sheet_name="z_kr", index=False)
-        pd.DataFrame(w_rows).to_excel(wr, sheet_name="w_p", index=False)
-        pd.DataFrame(ta_rows).to_excel(wr, sheet_name="ta", index=False)
-        pd.DataFrame(td_rows).to_excel(wr, sheet_name="td", index=False)
-        pd.DataFrame(ts_rows).to_excel(wr, sheet_name="ts", index=False)
-        pd.DataFrame(y_rows).to_excel(wr, sheet_name="y_jkr", index=False)
-        pd.DataFrame(d_rows).to_excel(wr, sheet_name="delta_jkr", index=False)
-        pd.DataFrame(itin).to_excel(wr, sheet_name="itinerary", index=False)
-    print(f"  ✓ Excel → {path}")
-    print(f"    f1={f1_val:.2f}  f2={f2_val:.2f}  min_slack={sim.get('min_slack')}")
+    _cols = {
+        "x":         ["var","i","j","k","r","val"],
+        "f":         ["var","p","k","r","val"],
+        "u":         ["var","j","k","r","u"],
+        "z":         ["var","k","r","z"],
+        "w":         ["var","p","k","r","w_val","ta_dp","su_p","ep"],
+        "ta":        ["var","node","k","r","time","stamp"],
+        "td":        ["var","node","k","r","time","stamp"],
+        "ts":        ["var","node","k","r","time","stamp"],
+        "y":         ["var","node","k","r","y_val"],
+        "delta":     ["var","node","k","r","delta_val"],
+        "itinerary": ["k","r","j","u","ta_stamp","td_stamp","y_after"],
+    }
+    dfs = {key: pd.DataFrame(vars_[key]) if vars_[key]
+           else pd.DataFrame(columns=_cols[key]) for key in _cols}
+
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        df_opt.to_excel(writer, sheet_name="optimization_results", index=False)
+        dfs["x"].to_excel(writer, sheet_name="x_ijkr", index=False)
+        dfs["f"].to_excel(writer, sheet_name="f_pkr", index=False)
+        dfs["u"].to_excel(writer, sheet_name="u_jkr", index=False)
+        dfs["z"].to_excel(writer, sheet_name="z_kr", index=False)
+        dfs["w"].to_excel(writer, sheet_name="w_p", index=False)
+        dfs["ta"].to_excel(writer, sheet_name="ta", index=False)
+        dfs["td"].to_excel(writer, sheet_name="td", index=False)
+        dfs["ts"].to_excel(writer, sheet_name="ts", index=False)
+        dfs["y"].to_excel(writer, sheet_name="y_jkr", index=False)
+        dfs["delta"].to_excel(writer, sheet_name="delta_jkr", index=False)
+        dfs["itinerary"].to_excel(writer, sheet_name="itinerary", index=False)
+
+    print(f"  → Excel (12 sheets) → {output_path}")
+    print(f"      f1={f1:.2f}  f2={f2:.2f}  |  arcs={len(dfs['x'])}  parts={len(dfs['f'])}")
+
+# =========================================================
+# SOLOMON I1 INSAATI + LOCAL SEARCH  (tek alpha config için)
+# =========================================================
+def build_and_polish(parts, vehicle_id, capacity, dist,
+                     alpha1, alpha2, alpha3, debug=False):
+    """
+    1) Solomon I1 ile rota inşa et.
+    2) 2-opt ile segment terslemesi yap.
+    3) Or-opt-on-pairs ile parça bazlı yeniden yerleştir.
+    """
+    unrouted = set(parts.keys())
+    route    = Route(vehicle_id, capacity, SHIFT_START)
+
+    # Tie-breaking kaç kez devreye girdi? (sadece raporlama için)
+    n_tie_pressure = 0
+    n_tie_c1       = 0
+    n_tie_index    = 0
+
+    # ── Solomon I1 Construction ──────────────────────────────────
+    while unrouted:
+        best_choice   = None
+        best_c2       = -float("inf")
+        best_pressure = -float("inf")
+        best_c1       = float("inf")
+        best_pid      = None
+
+        for p in sorted(unrouted):
+            c1, spec = route.try_insert(p, parts, dist,
+                                        alpha1=alpha1, alpha2=alpha2, alpha3=alpha3,
+                                        debug=debug)
+            if spec is None:
+                continue
+
+            # c2: depodan uzaklık ne kadar avantajlı, eklenme maliyeti ne kadar pahalı
+            c2       = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1
+            pressure = calculate_temporal_pressure(p, parts, dist)
+
+            # Tie-breaking zinciri: c2 > pressure > c1 > part_index
+            is_better = False
+            tie_kind  = None
+            if c2 > best_c2 + 1e-9:
+                is_better = True
+            elif abs(c2 - best_c2) < 1e-9:
+                if pressure > best_pressure + 1e-9:
+                    is_better = True; tie_kind = "pressure"
+                elif abs(pressure - best_pressure) < 1e-9:
+                    if c1 < best_c1 - 1e-9:
+                        is_better = True; tie_kind = "c1"
+                    elif abs(c1 - best_c1) < 1e-9 and (best_pid is None or p < best_pid):
+                        is_better = True; tie_kind = "index"
+
+            if is_better:
+                if tie_kind == "pressure": n_tie_pressure += 1
+                elif tie_kind == "c1":     n_tie_c1       += 1
+                elif tie_kind == "index":  n_tie_index    += 1
+                best_c2       = c2
+                best_pressure = pressure
+                best_c1       = c1
+                best_pid      = p
+                best_choice   = (p, spec, c1, c2, pressure)
+
+        if best_choice is None:
+            print(f"  ✗ Unrouted: {unrouted}"); break
+        p, spec, c1_val, c2_val, pr_val = best_choice
+        route.apply(p, spec, parts)
+        unrouted.remove(p)
+        print(f"    → inserted {p}  case={spec['case']}  "
+              f"c1={c1_val:.2f}  c2={c2_val:.2f}  pressure={pr_val:.2f}")
+
+    print(f"\n  Tie-break istatistiği: pressure={n_tie_pressure}  "
+          f"c1={n_tie_c1}  index={n_tie_index}")
+    print(f"  Route (inşaat): {' → '.join(route.nodes)}")
+
+    # ── 2-opt ───────────────────────────────────────────────────
+    pre_sim = route.simulate(parts, dist)
+    pre_f1  = compute_f1(pre_sim) if pre_sim["feasible"] else None
+    pre_f2, _ = compute_f2(parts, pre_sim) if pre_sim["feasible"] else (None, {})
+    route = two_opt(route, parts, dist, alpha1, alpha2, alpha3)
+    post_sim = route.simulate(parts, dist)
+    post_f1  = compute_f1(post_sim) if post_sim["feasible"] else None
+    post_f2, _ = compute_f2(parts, post_sim) if post_sim["feasible"] else (None, {})
+    print(f"  2-opt:         f1: {pre_f1} → {post_f1}   f2: {pre_f2} → {post_f2}")
+
+    # ── Or-opt-on-pairs ─────────────────────────────────────────
+    pre_sim = route.simulate(parts, dist)
+    pre_f1  = compute_f1(pre_sim) if pre_sim["feasible"] else None
+    pre_f2, _ = compute_f2(parts, pre_sim) if pre_sim["feasible"] else (None, {})
+    route = or_opt_on_pairs(route, parts, dist, alpha1, alpha2, alpha3)
+    post_sim = route.simulate(parts, dist)
+    post_f1  = compute_f1(post_sim) if post_sim["feasible"] else None
+    post_f2, _ = compute_f2(parts, post_sim) if post_sim["feasible"] else (None, {})
+    print(f"  Or-opt-pairs:  f1: {pre_f1} → {post_f1}   f2: {pre_f2} → {post_f2}")
+
+    return route
 
 # =========================================================
 # SOLVER
 # =========================================================
-def solve_case(case_name, vehicle_id, capacity, dist):
-    print(f"\n{'='*60}")
-    print(f"  SOLVING: {case_name}")
-    print(f"{'='*60}")
-    parts    = load_products(case_name)
-    unrouted = set(parts.keys())
-    route    = Route(vehicle_id, capacity)
+def solve_file(file_name, vehicle_id, capacity, dist, debug=False):
+    xl     = pd.ExcelFile(os.path.join(INPUT_DIR, file_name))
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    ts_tag = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    n_tie_pressure = n_tie_c1 = n_tie_index = 0
+    for sheet in xl.sheet_names:
+        print(f"\n{'='*60}")
+        print(f"  SOLVING: {file_name} | {sheet}")
+        print(f"{'='*60}")
 
-    while unrouted:
-        best_c2 = -float("inf"); best_pr = -float("inf")
-        best_c1 = float("inf");  best_pid = None; best_spec = None
+        parts = load_products(file_name, sheet)
 
-        for p in sorted(unrouted):
-            c1_val, spec = route.try_insert(p, parts, dist)
-            if spec is None: continue
-            c2_val = LAMBDA_C2 * dist.get(("h", parts[p]["origin"]), 0.0) - c1_val
-            pr_val = temporal_pressure(p, parts, dist)
+        # Her alpha konfigürasyonu için ayrı çözüm üret
+        configs_to_run = ALPHA_CONFIGS if MULTI_DECODE else [ALPHA_CONFIGS[0]]
 
-            better = False; tie_kind = None
-            if c2_val > best_c2 + 1e-9:
-                better = True
-            elif abs(c2_val - best_c2) < 1e-9:
-                if pr_val > best_pr + 1e-9:
-                    better = True; tie_kind = "pressure"
-                elif abs(pr_val - best_pr) < 1e-9:
-                    if c1_val < best_c1 - 1e-9:
-                        better = True; tie_kind = "c1"
-                    elif abs(c1_val - best_c1) < 1e-9 and (best_pid is None or p < best_pid):
-                        better = True; tie_kind = "index"
+        for alpha1, alpha2, alpha3, label in configs_to_run:
+            print(f"\n  ── Alpha config: {label}  "
+                  f"(α1={alpha1}, α2={alpha2}, α3={alpha3}) ──")
 
-            if better:
-                if   tie_kind == "pressure": n_tie_pressure += 1
-                elif tie_kind == "c1":       n_tie_c1 += 1
-                elif tie_kind == "index":    n_tie_index += 1
-                best_c2  = c2_val; best_pr = pr_val
-                best_c1  = c1_val; best_pid = p; best_spec = spec
+            route = build_and_polish(parts, vehicle_id, capacity, dist,
+                                     alpha1, alpha2, alpha3, debug=debug)
 
-        if best_pid is None:
-            print(f"  ⚠ Unrouted: {unrouted}"); break
+            print(f"  Route (final):   {' → '.join(route.nodes)}")
+            sim = route.simulate(parts, dist)
 
-        route.apply(best_pid, best_spec, parts)
-        unrouted.remove(best_pid)
-        print(f"  → {best_pid}  case={best_spec['case']}  "
-              f"c1={best_c1:.2f}  c2={best_c2:.2f}  pressure={best_pr:.2f}")
+            if sim["feasible"]:
+                f1        = compute_f1(sim)
+                f2, waits = compute_f2(parts, sim)
+                print(f"  f1 = {f1:.2f} dk  |  f2 = {f2:.2f} dk  |  depot = {minutes_to_hhmm(sim['depot_arrival'])}")
+                print(f"  Parça bekleme detayı (w_p = ta_dp + su_p - ep):")
+                for p, w in sorted(waits.items()):
+                    ta_dp = sim["arrivals_to_dest"].get(p, 0)
+                    su    = parts[p]["unload_time"]
+                    ep    = parts[p]["ready_time"]
+                    print(f"    {p}: ta_dp={ta_dp:.1f}  su={su:.1f}  ep={ep:.0f}  → w={w:.2f}")
 
-    print(f"\n  Tie-breaks: pressure={n_tie_pressure}  c1={n_tie_c1}  index={n_tie_index}")
-    print(f"  Route: {' → '.join(route.nodes)}")
-
-    sim = route.simulate(parts, dist)
-    if sim["feasible"]:
-        f1_val       = f1(sim)
-        f2_val, waits = f2(parts, sim)
-        print(f"  f1={f1_val:.2f} dk  f2={f2_val:.2f} dk  depot={hhmm(sim['depot_arrival'])}")
-        if sim.get("min_slack") is not None:
-            print(f"  min_slack={sim['min_slack']:.2f} dk @ {sim['min_slack_node']}")
-        for p, w in sorted(waits.items()):
-            ta_dp = sim["arrivals_to_dest"].get(p, 0)
-            print(f"    {p}: ta_dp={ta_dp:.1f}  su={parts[p]['unload_time']:.1f}  "
-                  f"ep={parts[p]['ready_time']}  → w={w:.2f}")
-
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        ts_tag = datetime.now().strftime('%Y%m%d_%H%M%S')
-        out    = os.path.join(OUTPUT_DIR, f"heuristic_v3_{case_name}_{ts_tag}.xlsx")
-        write_excel(out, case_name, route, parts, dist, sim, vehicle_id, f1_val, f2_val)
-        return f1_val, f2_val
-    else:
-        reason = sim.get("reason","?")
-        if reason == "lst_overflow":
-            print(f"  ✗ INFEASIBLE [LST]  node={sim['node']}  "
-                  f"ts={sim['ts']:.2f} > lst={sim['lst']:.2f}")
-        elif reason == "capacity":
-            print(f"  ✗ INFEASIBLE [kapasite]  node={sim['node']}  "
-                  f"load={sim['load']} > {sim['capacity']}")
-        elif reason == "shift":
-            print(f"  ✗ INFEASIBLE [vardiya]  depot_arrival={sim['depot_arrival']:.2f}")
-        elif reason == "precedence":
-            print(f"  ✗ INFEASIBLE [precedence]  part={sim['part']}")
-        else:
-            print(f"  ✗ INFEASIBLE [{reason}]")
-        return None, None
+                safe_sheet = sheet.replace("/","_").replace("\\","_").replace(" ","_")
+                safe_file  = file_name.replace(".xlsx","").replace(" ","_")
+                excel_path = os.path.join(
+                    OUTPUT_DIR,
+                    f"heuristic_{safe_file}_{safe_sheet}_{label}_{ts_tag}.xlsx"
+                )
+                write_milp_format_excel(excel_path, file_name, sheet, route, parts, dist, sim,
+                                        vehicle_id, f1, f2, alpha_label=label)
+            else:
+                reason = sim.get("reason")
+                if reason == "capacity":
+                    print(f"  ✗ INFEASIBLE — kapasite aşımı: "
+                          f"node={sim.get('node')}  "
+                          f"load={sim.get('load')} > capacity={sim.get('capacity')}")
+                elif reason == "shift":
+                    print(f"  ✗ INFEASIBLE — vardiya aşımı: "
+                          f"depot_arrival={sim.get('depot_arrival'):.2f} > {SHIFT_END}")
+                elif reason == "precedence":
+                    print(f"  ✗ INFEASIBLE — precedence ihlali: "
+                          f"part={sim.get('part')}  "
+                          f"origin={sim.get('origin')} → dest={sim.get('destination')}")
+                elif reason == "missing_visit":
+                    print(f"  ✗ INFEASIBLE — eksik ziyaret: part={sim.get('part')}")
+                else:
+                    print(f"  ✗ INFEASIBLE — reason={reason}  detail={sim}")
 
 # =========================================================
-# MAIN
+# ENTRY POINT
 # =========================================================
+def run_all(debug=False):
+    vehicle_id, capacity, dist = load_common_data()
+    print(f"Vehicle: {vehicle_id}  |  Capacity: {capacity} m²")
+    print(f"f2 tanımı: w_p = max(0, ta_dp + su_p - ep)")
+    print(f"Tie-break: c2 > pressure > c1 > part_index")
+    print(f"Local search: 2-opt + or-opt-on-pairs")
+    print(f"Multi-decode: {MULTI_DECODE}  |  Alpha configs: {[c[3] for c in ALPHA_CONFIGS]}")
+    print(f"Output: {OUTPUT_DIR}\n")
+
+    for f in FILES:
+        if not os.path.exists(os.path.join(INPUT_DIR, f)):
+            print(f"  Dosya bulunamadı, atlanıyor: {f}"); continue
+        solve_file(f, vehicle_id, capacity, dist, debug=debug)
+
+    print("\n" + "="*60)
+    print(f"TAMAMLANDI — çıktı klasörünü kontrol et: {OUTPUT_DIR}")
+    print("="*60)
+
 if __name__ == "__main__":
-    vehicle_id, capacity, dist = load_common()
-    print(f"Vehicle: {vehicle_id}  Capacity: {capacity} m²")
-    print(f"f2 = Σ max(0, ta_dp + su_p - ep)  [MILP kısıt 21 ile tutarlı]")
-    print(f"Tie-break: c2 > pressure > c1 > index")
-    print(f"LST filtresi: aktif  |  α₂ = {ALPHA2}")
-
-    summary = []
-    for case in CASES:
-        f1_val, f2_val = solve_case(case, vehicle_id, capacity, dist)
-        summary.append({"case": case, "f1": f1_val, "f2": f2_val})
-
-    print(f"\n{'='*60}")
-    print("ÖZET")
-    print(f"{'='*60}")
-    for s in summary:
-        if s["f1"] is not None:
-            print(f"  {s['case']:8s}  f1={s['f1']:.2f}  f2={s['f2']:.2f}")
-        else:
-            print(f"  {s['case']:8s}  INFEASIBLE")
+    run_all(debug=False)
