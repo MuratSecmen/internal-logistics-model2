@@ -8,7 +8,7 @@ Her Individual bir gene dict taşır:
     gene: dict[(k, r), list[str]]
 
     Anahtarlar : inst.KR_pairs'teki tüm geçerli (k, r) çiftleri.
-    Değerler   : o araç-rota slotuna atanan ürünlerin SIRALÏ listesi.
+    Değerler   : o araç-rota slotuna atanan ürünlerin SIRALI listesi.
                  Decode sırasında Solomon bu sırayı kullanır.
 
 Gene iki şeyi aynı anda kodlar:
@@ -25,13 +25,15 @@ Gene verildiğinde decoder şunu yapar:
             Solomon sadece geometrik pozisyonu (hangi iki düğüm arasına)
             belirler — araç ve insert sırası kromozomdan geliyor.
 
-Eğer herhangi bir ürün için c1=inf dönerse birey cezalandırılır:
+E�er herhangi bir ürün için c1=inf dönerse birey cezalandırılır:
     f1 = f2 = PENALTY
 
 Objectives
 ==========
     f1 = fleet.total_route_duration()   (minimize)
     f2 = fleet.total_wait()             (minimize)
+    Not: f2, solomon.py'de t^a_{dp} + s^u_p - e_p olarak hesaplanmalıdır
+         (Document-4 Constraint 21). Bu sorumluluk solomon.py'dedir.
 
 NSGA-2 Components
 =================
@@ -45,6 +47,27 @@ NSGA-2 Components
     transfer_mutation    — ürünü farklı (k, r)'ye taşır.
 
     nsga2                — ana döngü.
+
+Düzeltmeler (v2)
+================
+    FIX-1  gene_from_fleet_helper import kaldırıldı (fonksiyon bu dosyada
+           gene_from_fleet adıyla tanımlı; solomon.py'den almaya gerek yok).
+    FIX-2  _STOCK_BIASES ve construct, try/except ile import edilir;
+           solomon.py'de yoksa built-in fallback devreye girer.
+    FIX-3  gene_from_fleet: ürün, yalnızca origin düğümünde tespit edilir
+           (önceki versiyonda "or inst.d[p] == node" ekliydi, gereksiz ve
+           geçersiz rotada yanlış sıra üretebilirdi).
+    FIX-4  random_gene: slot içi karışıklık için rng.shuffle eklendi.
+    FIX-5  ox_crossover _build_child Phase-3: artık doğru alt_donor'ı
+           kullanıyor. Önceki versiyonda tüm slotlar için donor_b'nin
+           sırası baz alınıyordu; donor_b kaynaklı slotlarda bu OX'u
+           no-op hale getiriyordu.
+    FIX-6  tournament_select: rng.sample ile iki farklı birey seçilmesi
+           garanti altına alındı (önceden aynı birey iki kez seçilebiliyordu).
+    FIX-7  nsga2 offspring döngüsü: pop_size tek sayıysa pop_size+1 offspring
+           üretme hatası giderildi (c2 eklenmeden önce boyut kontrolü yapılıyor).
+    FIX-8  _solomon_seeds: construct=None ise graceful fallback.
+    FIX-9  history: Pareto front büyüklüğü (|front_0|) 5. kolon olarak eklendi.
 """
 
 from __future__ import annotations
@@ -54,12 +77,33 @@ import math
 import random
 from dataclasses import dataclass, field
 
+# ── Zorunlu solomon importları ────────────────────────────────────────────────
 from solomon import (
     FleetState,
     best_insert_into_route,
     apply_insertion,
-    gene_from_fleet_helper,   # tanımı aşağıda
+    # FIX-1: gene_from_fleet_helper ÇIKARILDI.
+    # Fonksiyon bu dosyada gene_from_fleet adıyla tanımlı;
+    # solomon.py'den import etmeye gerek yok.
 )
+
+# ── Opsiyonel solomon importları (FIX-2) ──────────────────────────────────────
+# _STOCK_BIASES ve construct solomon.py'de yoksa built-in fallback kullanılır.
+try:
+    from solomon import construct, _STOCK_BIASES
+    _SOLOMON_AVAILABLE = True
+except ImportError:
+    construct = None
+    _SOLOMON_AVAILABLE = False
+    # Document-5'teki 6-bias ladder (fallback)
+    _STOCK_BIASES = [
+        ("route_duration", {"alpha": (0.0001, 1.0,  0.01 )}),
+        ("wait_time",      {"alpha": (0.0001, 0.01, 1.0  )}),
+        ("balanced",       {"alpha": (0.0001, 0.5,  0.5  )}),
+        ("distance",       {"alpha": (1.0,    1e-4, 1e-4 )}),
+        ("dist_wait",      {"alpha": (0.5,    1e-4, 0.5  )}),
+        ("dist_duration",  {"alpha": (0.5,    0.5,  1e-4 )}),
+    ]
 
 log = logging.getLogger("internal_logistics.nsga2")
 
@@ -68,21 +112,32 @@ EPS     = 1e-9
 
 
 # ============================================================
-# Yardımcı: FleetState → gene çevirici
-# (solomon.py'ye eklenecek küçük fonksiyon)
+# Yardımcı: FleetState → gene çevirici  (FIX-3)
 # ============================================================
 
 def gene_from_fleet(fleet: FleetState) -> dict:
-    """Decode edilmiş bir FleetState'den gene üret (Solomon seed'leri için)."""
+    """
+    Decode edilmiş bir FleetState'den gene üret (Solomon seed'leri için).
+
+    FIX-3: Önceki versiyonda bir ürün, origin VEYA destination düğümü
+    ilk karşılaşıldığında listeye ekleniyordu:
+        if p not in seen and (inst.o[p] == node or inst.d[p] == node)
+    Bu gereksiz: geçerli bir rotada destination her zaman origin'den
+    sonra gelir; dolayısıyla destination'a ulaşıldığında ürün zaten
+    'seen' içindedir. Bununla birlikte, geçersiz bir FleetState'de
+    (origin'den önce destination ziyaret edilmişse) ürün yanlış
+    pozisyonda listeye girebilirdi.
+    Düzeltme: yalnızca origin düğümünde tespit yap.
+    """
     gene = {kr: [] for kr in fleet.inst.KR_pairs}
     for kr, route in fleet.routes.items():
-        # parts kümesi sırasız; insert sırası node listesinden çıkarılır
-        inst = fleet.inst
+        inst    = fleet.inst
         ordered = []
-        seen = set()
-        for node in route.nodes[1:-1]:           # depot hariç
+        seen    = set()
+        for node in route.nodes[1:-1]:          # depot hariç
             for p in route.parts:
-                if p not in seen and (inst.o[p] == node or inst.d[p] == node):
+                # FIX-3: sadece origin koşulu
+                if p not in seen and inst.o[p] == node:
                     ordered.append(p)
                     seen.add(p)
         gene[kr] = ordered
@@ -104,8 +159,6 @@ class Individual:
     crowding: float = 0.0               # crowding distance
     fleet: object = field(default=None, repr=False)  # decode sonrası FleetState
 
-    # ----------------------------------------------------------
-    # Pareto dominance
     # ----------------------------------------------------------
     def dominates(self, other: "Individual") -> bool:
         """self, other'ı Pareto-domine ediyorsa True (minimizasyon)."""
@@ -131,14 +184,22 @@ def _clone(ind: Individual) -> Individual:
 def random_gene(inst, rng: random.Random) -> dict:
     """
     Tüm ürünleri karıştırıp round-robin ile (k,r) slotlarına dağıt.
-    Her slot yaklaşık eşit yük alır.
+
+    FIX-4: Önceki versiyonda slot içi sıra, round-robin atama sırasına
+    göre deterministikti (ürün listesi shuffle edilse de slot içindeki
+    göreli sıra korunuyordu). Şimdi her slot'un listesi de ayrıca
+    shuffle ediliyor; bu, başlangıç popülasyonuna daha fazla çeşitlilik
+    katar.
     """
     products = list(inst.P)
     rng.shuffle(products)
     kr_pairs = list(inst.KR_pairs)
-    gene = {kr: [] for kr in kr_pairs}
+    gene     = {kr: [] for kr in kr_pairs}
     for i, p in enumerate(products):
         gene[kr_pairs[i % len(kr_pairs)]].append(p)
+    # FIX-4: slot içi shuffle
+    for kr in gene:
+        rng.shuffle(gene[kr])
     return gene
 
 
@@ -161,6 +222,11 @@ def decode(ind: Individual, inst, cfg: dict) -> Individual:
     belirler (araç ve insert sırası kromozomdan gelir).
 
     Herhangi bir ürün yerleştirilemezse → f1 = f2 = PENALTY.
+
+    NOT: f2 hesabı (fleet.total_wait()) solomon.py'deki FleetState'e
+    delege edilir. Document-4 Constraint-21'e göre bekleme süresi
+    t^a_{dp} + s^u_p - e_p şeklinde hesaplanmalıdır; bu doğruluğun
+    sorumluluğu solomon.py'dedir.
     """
     fleet = FleetState.empty(inst)
 
@@ -174,15 +240,15 @@ def decode(ind: Individual, inst, cfg: dict) -> Individual:
                     p, route, fleet, cfg, baseline_dur, baseline_wait
                 )
                 if not math.isfinite(plan.c1):
-                    ind.f1 = PENALTY
-                    ind.f2 = PENALTY
+                    ind.f1    = PENALTY
+                    ind.f2    = PENALTY
                     ind.fleet = None
                     return ind
                 apply_insertion(p, plan, fleet)
 
     ind.fleet = fleet
-    ind.f1 = fleet.total_route_duration()
-    ind.f2 = fleet.total_wait()
+    ind.f1    = fleet.total_route_duration()
+    ind.f2    = fleet.total_wait()
     return ind
 
 
@@ -202,10 +268,10 @@ def non_dominated_sort(pop: list) -> list:
 
     Karmaşıklık: O(M · N²), M = hedef sayısı (2), N = popülasyon büyüklüğü.
     """
-    n = len(pop)
-    S            = [[] for _ in range(n)]   # S[i]: i'nin domine ettiği bireyler
-    n_dominated  = [0]  * n                 # i'yi domine eden birey sayısı
-    fronts       = [[]]
+    n           = len(pop)
+    S           = [[] for _ in range(n)]
+    n_dominated = [0]  * n
+    fronts      = [[]]
 
     for i in range(n):
         for j in range(n):
@@ -242,14 +308,14 @@ def crowding_distance(pop: list, front: list) -> None:
     """
     Bir fronttaki bireylere crowding distance ata (in-place).
 
-    Her hedef ekseninde sıralayıp komşu değer farklarını normalize ederek toplar.
-    Boundary bireyler sonsuz mesafe alır (her zaman hayatta kalır).
+    Her hedef ekseninde sıralayıp komşu değer farklarını normalize ederek
+    toplar. Boundary bireyler sonsuz mesafe alır (her zaman hayatta kalır).
     """
     for i in front:
         pop[i].crowding = 0.0
 
     for key in ("f1", "f2"):
-        srt = sorted(front, key=lambda i: getattr(pop[i], key))
+        srt   = sorted(front, key=lambda i: getattr(pop[i], key))
         pop[srt[0]].crowding  = math.inf
         pop[srt[-1]].crowding = math.inf
         f_min = getattr(pop[srt[0]],  key)
@@ -262,23 +328,27 @@ def crowding_distance(pop: list, front: list) -> None:
 
 
 # ============================================================
-# Selection — Binary Tournament
+# Selection — Binary Tournament  (FIX-6)
 # ============================================================
 
 def tournament_select(pop: list, rng: random.Random) -> Individual:
     """
     İkili turnuva seçimi.
     Kural: düşük rank kazanır; eşit rankta yüksek crowding distance kazanır.
+
+    FIX-6: Önceki versiyonda rng.choice(pop) iki kez çağrılıyordu;
+    aynı bireyin iki kez seçilmesi mümkündü (self-tournament).
+    rng.sample(range(len(pop)), 2) ile iki farklı indeks garanti edilir.
     """
-    a = rng.choice(pop)
-    b = rng.choice(pop)
+    i, j = rng.sample(range(len(pop)), 2)
+    a, b = pop[i], pop[j]
     if a.rank != b.rank:
         return a if a.rank < b.rank else b
     return a if a.crowding >= b.crowding else b
 
 
 # ============================================================
-# Crossover — Order Crossover (OX), araç bazlı
+# Crossover — Order Crossover (OX), araç bazlı  (FIX-5)
 # ============================================================
 
 def _ox_lists(lst_a: list, lst_b: list, rng: random.Random) -> list:
@@ -291,7 +361,7 @@ def _ox_lists(lst_a: list, lst_b: list, rng: random.Random) -> list:
     n = len(lst_a)
     if n <= 1:
         return list(lst_a)
-    lo, hi = sorted(rng.sample(range(n), 2))
+    lo, hi  = sorted(rng.sample(range(n), 2))
     child   = [None] * n
     child[lo: hi + 1] = lst_a[lo: hi + 1]
     seg_set = set(child[lo: hi + 1])
@@ -310,49 +380,50 @@ def ox_crossover(p1: Individual, p2: Individual,
     Strateji (3 aşama):
     ──────────────────
     Aşama 1 — Slot bölme:
-        Rastgele bir s ∈ [0, |KR|-1) seçilir.
+        Rastgele bir s seçilir.
         Çocuk 1: slot 0..s → P1'den, slot s+1.. → P2'den.
         Çocuk 2: slot 0..s → P2'den, slot s+1.. → P1'den.
 
     Aşama 2 — Çakışma giderme:
         Her slot, önce kendi donor'ından ürünleri alır (henüz atanmayanlar).
-        Bu şekilde her ürün tam olarak bir kez görünür.
+        Eksik ürünler en hafif slota eklenir. Her ürün tam bir kez görünür.
 
-    Aşama 3 — OX sıralama:
-        Her slot için iki ebeveyn aynı ürünleri taşıyorsa, o slot'un
-        sırasına OX uygulanır (donor_a sıra + donor_b'nin sırası temel).
-
-    Not: Aşama 2 sonrası her slot ürün listesi atama-doğru olduğundan
-    gene_is_valid garantilidir.
+    Aşama 3 — OX sıralama (FIX-5):
+        Her slot için primary donor'ın sırası (lst_a) ile o slotun
+        ALT donor'ının sırası (lst_b) arasında OX uygulanır.
+        Önceki versiyonda tüm slotlar için donor_b kullanılıyordu;
+        donor_b kaynaklı slotlarda lst_a == lst_b olduğundan OX
+        işlevsiz kalıyordu. Şimdi slot_donor sözlüğü hangi slotun
+        hangi donor'dan geldiğini takip eder ve alt_donor doğru seçilir.
     """
     kr_pairs = list(inst.KR_pairs)
     n_kr     = len(kr_pairs)
     s        = rng.randint(0, n_kr - 2) if n_kr > 1 else 0
 
     def _build_child(donor_a: Individual, donor_b: Individual) -> Individual:
-        gene_c   = {kr: [] for kr in kr_pairs}
-        assigned = set()
+        gene_c     = {kr: [] for kr in kr_pairs}
+        assigned   = set()
+        slot_donor = {}   # kr → (primary_donor, alt_donor)
 
-        # Aşama 1 & 2: slot bölme + çakışma giderme
+        # ── Aşama 1 & 2: slot bölme + çakışma giderme ────────
         for idx, kr in enumerate(kr_pairs):
-            donor = donor_a if idx <= s else donor_b
-            alt   = donor_b if idx <= s else donor_a
-            # Önce ana donor'dan henüz atanmamışları al
-            lst = [p for p in donor.gene.get(kr, []) if p not in assigned]
-            # Eksik kalanları alt donor'ın global sırasından tamamla
-            # (bu slot için değil, ilerleyen slotlar için rezervde kalır)
+            primary = donor_a if idx <= s else donor_b
+            alt     = donor_b if idx <= s else donor_a
+            slot_donor[kr] = (primary, alt)             # kaydediliyor
+            lst = [p for p in primary.gene.get(kr, []) if p not in assigned]
             assigned.update(lst)
             gene_c[kr] = lst
 
-        # Aşama 3: OX sıralama — her slot için
+        # ── Aşama 3: OX sıralama (FIX-5) ─────────────────────
         for kr in kr_pairs:
-            lst_a = gene_c[kr]                         # halihazırda a-donor sırası
-            lst_b = [p for p in donor_b.gene.get(kr, [])
-                     if p in set(lst_a)]               # b-donor'ın aynı ürünleri
+            lst_a = gene_c[kr]
+            _, alt_donor = slot_donor[kr]               # doğru alt donor
+            lst_b = [p for p in alt_donor.gene.get(kr, [])
+                     if p in set(lst_a)]
             if len(lst_a) >= 2 and len(lst_b) == len(lst_a):
                 gene_c[kr] = _ox_lists(lst_a, lst_b, rng)
 
-        # Güvenlik: hâlâ atanmamış ürün varsa (kenar durum) en az dolu slota ekle
+        # ── Güvenlik: eksik ürünleri en az dolu slota ekle ────
         missing = [p for p in inst.P if p not in assigned]
         for p in missing:
             lightest = min(kr_pairs, key=lambda kr: len(gene_c[kr]))
@@ -372,19 +443,18 @@ def swap_mutation(ind: Individual, rng: random.Random,
                   p: float = 0.15) -> Individual:
     """
     Rota-içi takas (intra-route swap).
-
     p olasılığıyla ≥2 ürün içeren rastgele bir (k,r) slotu seçilir;
     o slottaki iki rastgele pozisyon yer değiştirir.
     """
     if rng.random() > p:
         return ind
-    ind = _clone(ind)
+    ind      = _clone(ind)
     eligible = [kr for kr, lst in ind.gene.items() if len(lst) >= 2]
     if not eligible:
         return ind
-    kr  = rng.choice(eligible)
-    lst = ind.gene[kr]
-    i, j = rng.sample(range(len(lst)), 2)
+    kr       = rng.choice(eligible)
+    lst      = ind.gene[kr]
+    i, j     = rng.sample(range(len(lst)), 2)
     lst[i], lst[j] = lst[j], lst[i]
     return ind
 
@@ -393,13 +463,12 @@ def inversion_mutation(ind: Individual, rng: random.Random,
                        p: float = 0.10) -> Individual:
     """
     Rota-içi segment ters çevirme (intra-route inversion).
-
     p olasılığıyla ≥2 ürün içeren bir slot seçilir; rastgele [lo,hi]
     alt-segmenti tersine çevrilir.
     """
     if rng.random() > p:
         return ind
-    ind = _clone(ind)
+    ind      = _clone(ind)
     eligible = [kr for kr, lst in ind.gene.items() if len(lst) >= 2]
     if not eligible:
         return ind
@@ -414,26 +483,24 @@ def transfer_mutation(ind: Individual, inst, rng: random.Random,
                       p: float = 0.10) -> Individual:
     """
     Rotalar-arası transfer (inter-route transfer).
-
     p olasılığıyla boş olmayan rastgele bir kaynak (k,r)'den bir ürün
     koparılır ve rastgele bir hedef (k',r')'nin rastgele pozisyonuna eklenir.
-    Atama geçerliliği korunur.
     """
     if rng.random() > p:
         return ind
-    ind = _clone(ind)
+    ind       = _clone(ind)
     non_empty = [kr for kr, lst in ind.gene.items() if lst]
     if not non_empty:
         return ind
-    src_kr = rng.choice(non_empty)
-    tgt_kr = rng.choice(list(inst.KR_pairs))
+    src_kr  = rng.choice(non_empty)
+    tgt_kr  = rng.choice(list(inst.KR_pairs))
     if tgt_kr == src_kr:
         return ind
-    src_lst  = ind.gene[src_kr]
-    p_idx    = rng.randint(0, len(src_lst) - 1)
-    product  = src_lst.pop(p_idx)
-    tgt_lst  = ind.gene[tgt_kr]
-    ins_pos  = rng.randint(0, len(tgt_lst))
+    src_lst = ind.gene[src_kr]
+    p_idx   = rng.randint(0, len(src_lst) - 1)
+    product = src_lst.pop(p_idx)
+    tgt_lst = ind.gene[tgt_kr]
+    ins_pos = rng.randint(0, len(tgt_lst))
     tgt_lst.insert(ins_pos, product)
     return ind
 
@@ -445,23 +512,38 @@ def transfer_mutation(ind: Individual, inst, rng: random.Random,
 def _solomon_seeds(inst, cfg, n: int) -> list:
     """
     Solomon multi-start'tan n farklı bias ile tohum bireyler üret.
-    construct() kullanılır (backtracking dahil).
+
+    FIX-8: construct=None ise (solomon.py'de export yoksa) graceful
+    fallback — boş liste döner, rastgele bireyler ile doldurulur.
     """
-    from solomon import construct, _STOCK_BIASES
+    # FIX-8
+    if not _SOLOMON_AVAILABLE or construct is None:
+        log.warning(
+            "solomon.construct veya _STOCK_BIASES bulunamadı; "
+            "Solomon tohumları atlanıyor, rastgele bireyler kullanılacak."
+        )
+        return []
+
     seeds = []
     for name, alphas in _STOCK_BIASES[:n]:
         trial_cfg = dict(cfg)
         trial_cfg.update(alphas)
-        fleet, status, _ = construct(inst, trial_cfg)
-        if status == "feasible":
-            gene = gene_from_fleet(fleet)
-            ind  = Individual(gene=gene)
-            # f1/f2 zaten biliniyor; fleet'i koru
-            ind.fleet = fleet
-            ind.f1    = fleet.total_route_duration()
-            ind.f2    = fleet.total_wait()
-            seeds.append(ind)
-            log.info("Solomon seed [%s]: f1=%.2f  f2=%.2f", name, ind.f1, ind.f2)
+        try:
+            fleet, status, _ = construct(inst, trial_cfg)
+            if status == "feasible":
+                gene = gene_from_fleet(fleet)
+                ind  = Individual(gene=gene)
+                ind.fleet = fleet
+                ind.f1    = fleet.total_route_duration()
+                ind.f2    = fleet.total_wait()
+                seeds.append(ind)
+                log.info("Solomon seed [%s]: f1=%.2f  f2=%.2f",
+                         name, ind.f1, ind.f2)
+            else:
+                log.warning("Solomon seed [%s]: infeasible, atlandı.", name)
+        except Exception as exc:
+            log.warning("Solomon seed [%s] başarısız: %s", name, exc)
+
     return seeds
 
 
@@ -470,26 +552,22 @@ def initial_population(inst, cfg, pop_size: int,
                         n_solomon_seeds: int = 3) -> list:
     """
     pop_size büyüklüğünde ilk popülasyon oluşturur ve decode eder.
-
-    İlk n_solomon_seeds birey Solomon tohumlarından gelir (yüksek kaliteli
-    başlangıç noktaları). Geri kalanı rastgele gene'lerle doldurulur.
+    İlk n_solomon_seeds birey Solomon tohumlarından gelir.
+    Geri kalanı rastgele gene'lerle doldurulur.
     """
     population = []
 
-    # 1) Solomon tohumları
     for ind in _solomon_seeds(inst, cfg, n_solomon_seeds):
         population.append(ind)
 
-    # 2) Rastgele bireyler
     while len(population) < pop_size:
         gene = random_gene(inst, rng)
         ind  = Individual(gene=gene)
         decode(ind, inst, cfg)
         population.append(ind)
 
-    log.info("Initial pop: %d total, %d feasible",
-             pop_size,
-             sum(1 for i in population if i.is_feasible()))
+    log.info("Başlangıç pop: %d birey, %d feasible",
+             pop_size, sum(1 for i in population if i.is_feasible()))
     return population
 
 
@@ -500,6 +578,8 @@ def initial_population(inst, cfg, pop_size: int,
 def nsga2(inst, cfg: dict) -> tuple:
     """
     NSGA-2 çalıştır. (pareto_front, history) döner.
+
+    history formatı: [(nesil, n_feasible, best_f1, best_f2, |front_0|), ...]
 
     Yapılandırma (cfg["nsga2"] altında):
     ─────────────────────────────────────
@@ -512,15 +592,15 @@ def nsga2(inst, cfg: dict) -> tuple:
     n_solomon_seeds   int   varsayılan 3
     seed              int   varsayılan 42
     """
-    nc          = cfg.get("nsga2", {})
-    pop_size    = int(nc.get("pop_size",          100))
-    n_gen       = int(nc.get("n_generations",     200))
-    p_cross     = float(nc.get("p_crossover",    0.90))
-    p_swap      = float(nc.get("p_swap",         0.15))
-    p_inv       = float(nc.get("p_inv",          0.10))
-    p_transfer  = float(nc.get("p_transfer",     0.10))
-    n_seeds     = int(nc.get("n_solomon_seeds",     3))
-    seed        = nc.get("seed", 42)
+    nc         = cfg.get("nsga2", {})
+    pop_size   = int(nc.get("pop_size",        100))
+    n_gen      = int(nc.get("n_generations",   200))
+    p_cross    = float(nc.get("p_crossover",  0.90))
+    p_swap     = float(nc.get("p_swap",       0.15))
+    p_inv      = float(nc.get("p_inv",        0.10))
+    p_transfer = float(nc.get("p_transfer",   0.10))
+    n_seeds    = int(nc.get("n_solomon_seeds",   3))
+    seed       = nc.get("seed", 42)
 
     rng = random.Random(seed)
     log.info("NSGA-2 BAŞLIYOR | pop=%d  gen=%d  seed=%d",
@@ -528,12 +608,11 @@ def nsga2(inst, cfg: dict) -> tuple:
 
     # ── 1. Başlangıç popülasyonu ──────────────────────────────
     population = initial_population(inst, cfg, pop_size, rng, n_seeds)
-
-    fronts = non_dominated_sort(population)
+    fronts     = non_dominated_sort(population)
     for front in fronts:
         crowding_distance(population, front)
 
-    history = []   # (nesil, feasible_sayısı, en_iyi_f1, en_iyi_f2)
+    history = []
 
     # ── 2. Ana döngü ─────────────────────────────────────────
     for gen in range(1, n_gen + 1):
@@ -545,19 +624,20 @@ def nsga2(inst, cfg: dict) -> tuple:
             p1 = tournament_select(population, rng)
             p2 = tournament_select(population, rng)
 
-            # Crossover
             if rng.random() < p_cross:
                 c1, c2 = ox_crossover(p1, p2, inst, rng)
             else:
                 c1, c2 = _clone(p1), _clone(p2)
 
-            # Mutasyon + Decode
             for child in (c1, c2):
-                child = swap_mutation(child,     rng, p_swap)
-                child = inversion_mutation(child, rng, p_inv)
+                child = swap_mutation(child,      rng, p_swap)
+                child = inversion_mutation(child,  rng, p_inv)
                 child = transfer_mutation(child, inst, rng, p_transfer)
                 decode(child, inst, cfg)
-                offspring.append(child)
+
+                # FIX-7: pop_size tek sayıysa taşmayı önle
+                if len(offspring) < pop_size:
+                    offspring.append(child)
 
         # ── 2b. Birleşik havuz (2N) ───────────────────────────
         combined = population + offspring
@@ -568,14 +648,13 @@ def nsga2(inst, cfg: dict) -> tuple:
             crowding_distance(combined, front)
 
         # ── 2d. Sonraki nesil seçimi (elitism) ────────────────
-        #   Front'ları sırayla ekle; tam sığmayan frontu crowding'e göre kes.
         next_pop = []
         for front in fronts:
             if len(next_pop) + len(front) <= pop_size:
                 next_pop.extend(combined[i] for i in front)
             else:
-                remaining = pop_size - len(next_pop)
-                best_of_front = sorted(
+                remaining      = pop_size - len(next_pop)
+                best_of_front  = sorted(
                     front,
                     key=lambda i: combined[i].crowding,
                     reverse=True,
@@ -585,18 +664,23 @@ def nsga2(inst, cfg: dict) -> tuple:
 
         population = next_pop
 
-        # ── 2e. Kayıt + log ───────────────────────────────────
+        # ── 2e. Kayıt (FIX-9: |front_0| eklendi) ─────────────
         feasible   = [ind for ind in population if ind.is_feasible()]
         n_feas     = len(feasible)
         best_f1    = min((ind.f1 for ind in feasible), default=PENALTY)
         best_f2    = min((ind.f2 for ind in feasible), default=PENALTY)
-        history.append((gen, n_feas, best_f1, best_f2))
+        pareto_now = [ind for ind in population if ind.rank == 1
+                      and ind.is_feasible()]
+        # FIX-9: 5. kolon = Pareto front büyüklüğü
+        history.append((gen, n_feas, best_f1, best_f2, len(pareto_now)))
 
         if gen % 10 == 0 or gen == 1:
-            log.info("Nesil %3d | uygun=%d/%d | f1=%.2f | f2=%.2f",
-                     gen, n_feas, pop_size, best_f1, best_f2)
+            log.info(
+                "Nesil %3d | uygun=%d/%d | f1=%.2f | f2=%.2f | |PF|=%d",
+                gen, n_feas, pop_size, best_f1, best_f2, len(pareto_now)
+            )
 
-    # ── 3. Pareto front çıkarımı ──────────────────────────────
+    # ── 3. Final Pareto front ─────────────────────────────────
     pareto = [ind for ind in population
               if ind.rank == 1 and ind.is_feasible()]
     log.info("NSGA-2 BİTTİ | |Pareto|=%d", len(pareto))
