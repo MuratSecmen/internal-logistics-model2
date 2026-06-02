@@ -73,9 +73,9 @@ except ImportError:
         ("route_duration", {"alpha_1": 0.0001, "alpha_2": 1.0,   "alpha_3": 0.01  }),
         ("wait_time",      {"alpha_1": 0.0001, "alpha_2": 0.01,  "alpha_3": 1.0   }),
         ("balanced",       {"alpha_1": 0.0001, "alpha_2": 0.5,   "alpha_3": 0.5   }),
-        ("distance",       {"alpha_1": 1.0,    "alpha_2": 1e-4,  "alpha_3": 1e-4  }),
-        ("dist_wait",      {"alpha_1": 0.5,    "alpha_2": 1e-4,  "alpha_3": 0.5   }),
-        ("dist_duration",  {"alpha_1": 0.5,    "alpha_2": 0.5,   "alpha_3": 1e-4  }),
+        ("distance",       {"alpha_1": 1.0,    "alpha_2": 0.0001,  "alpha_3": 0.0001  }),
+        ("dist_wait",      {"alpha_1": 0.5,    "alpha_2": 0.0001,  "alpha_3": 0.5   }),
+        ("dist_duration",  {"alpha_1": 0.5,    "alpha_2": 0.5,   "alpha_3": 0.0001  }),
     ]
 
 log = logging.getLogger("internal_logistics.nsga2")
