@@ -432,7 +432,11 @@ def ox_crossover(p1: Individual, p2: Individual,
 
         return Individual(gene=gene_c)
 
-    return _build_child(p1, p2), _build_child(p2, p1)
+    c1 = _build_child(p1, p2)
+    c2 = _build_child(p2, p1)
+    assert gene_is_valid(c1.gene, inst), "ox_crossover c1 invalid"
+    assert gene_is_valid(c2.gene, inst), "ox_crossover c2 invalid"
+    return c1, c2
 
 
 # ============================================================
