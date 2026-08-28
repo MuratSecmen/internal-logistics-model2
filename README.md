@@ -1,149 +1,119 @@
-# Internal Logistics Optimization - PDVRP Model
+# Internal Logistics Optimization — PDVRP Model
 
 ## Problem Tanımı
-**Pickup-Delivery Vehicle Routing Problem with Product Readiness Date (PDVRP)** - tesis içi lojistik operasyonlarının karma tam sayılı programlama (MILP) ile optimizasyonu.
 
-**Amaç Fonksiyonları:**
-- Birincil: Toplam depo varış sürelerinin minimizasyonu
-- İkincil: Epsilon-constraint ile parça bekleme süresi kontrolü (≤150 dk)
+**Pickup-Delivery Vehicle Routing Problem with Product Readiness Date (PDVRP)** — tesis içi lojistik operasyonlarının karma tam sayılı programlama (MILP) ve Solomon tabanlı sezgisel yöntemlerle optimizasyonu.
+
+**Amaç (varsayılan):** Toplam parça bekleme süresinin (`wait`) minimizasyonu. `run_model.py`'deki `OBJECTIVE` değişkeni ile `time` (toplam süre) veya `distance` (toplam mesafe) olarak da çalıştırılabilir.
 
 ## Teknoloji Stack
+
 - Python 3.8+
-- Gurobi Optimizer 11.x (MILP Solver)
-- Pandas (veri işleme)
+- Gurobi Optimizer (MILP Solver) — MIP modeli ve NSGA-II decoder karşılaştırmaları için
+- Pandas / openpyxl (veri işleme)
 
 ## Dosya Yapısı
+
 ```
-project/
-├── nodes.xlsx
-├── vehicles.xlsx
-├── products.xlsx
-├── distances - dakika.xlsx
-├── model_tight_bigm.py
-├── model_unified_bigm.py
-└── results/
+internal-logistics-model2/
+├── run_model.py                    # Ana MILP modeli (Gurobi)
+├── solomon_heuristic.py            # Solomon I1 yerleştirme sezgiseli (çok parçalı senaryolar)
+├── inputs/
+│   ├── vehicles.xlsx
+│   ├── distances - dakika.xlsx     # OD seyahat süresi matrisi (dakika)
+│   ├── distances - metre.xlsx      # OD mesafe matrisi (metre)
+│   └── B320_Mesafe_Matrisleri.xlsx # Ham mesafe verisi (referans)
+│
+│   NOT: run_model.py ayrıca `inputs/nodes.xlsx` ve `inputs/products.xlsx`
+│   dosyalarını da bekler — bu iki dosya bu repoda YOK, kendi veri
+│   setinizle eklemeniz gerekiyor (bkz. "Kullanım" altında beklenen şema).
+│
+├── nsga2_experiments/               # MIP / Solomon / NSGA-II karşılaştırma deneyleri
+│   ├── nsga2.py                     # NSGA-II algoritması (Solomon tabanlı decoder)
+│   ├── frontier_metrics.py          # Pareto frontier metrikleri (HV, GD, IGD)
+│   ├── task3_runner.py              # Deney: MIP vs Solomon (64 run)
+│   ├── task4_runner.py              # Deney: MIP (aug. ε-constraint) vs NSGA-II (48 run)
+│   ├── NSGA2_BilgiNotlari.xlsx
+│   └── BilgiNotu{1,2,3}_*.docx      # Kromozom / Decoder / Offspring tasarım notları
+│
+├── parca nu genel/                  # Bağımsız veri hazırlama araçları (area_m2 tahmini)
+│   ├── parca_yuzey_hacim_analizi.py # Geçmiş taşıma verisinden parça yüzey alanı/hacim çıkarımı
+│   ├── romur_boyut_tahmini.py       # Boyutu bilinmeyen parçalar için kapasite-tabanlı tahmin
+│   ├── 2025_parça detayları.xlsx    # Girdi
+│   └── 2026_taşınan parça nu.s.xlsx # Girdi
+│
+├── requirements.txt
+└── README.md
 ```
 
-## Matematiksel Model
-
-### Karar Değişkenleri
-| Değişken | Tip | Tanım |
-|----------|-----|-------|
-| xᵢⱼₖᵣ | Binary | Araç k, rota r'de i→j hareketi |
-| fₚₖᵣ | Binary | Parça p atama |
-| wₚ | Continuous | Parça p bekleme süresi |
-| taᵢₖᵣ, tdᵢₖᵣ | Continuous | Varış/ayrılış zamanları |
-| yⱼₖᵣ | Continuous | Düğüm j'deki yük (m²) |
-| uⱼₖᵣ | Integer | MTZ subtour elimination |
-
-### Kritik Kısıt Grupları
-1. **Rota Yapısı (C4-C9):** Flow conservation, route closure
-2. **Atama (C10-C12):** Her parça bir kez, pickup-delivery ziyaret
-3. **Zaman (C13-C22):** Time related issues, pickup-delivery precedence
-4. **Kapasite (C23-C27):** Araç kapasitesi, yük akışı
-5. **Subtour (C29-C32):** Miller-Tucker-Zemlin (MTZ) formulation
-
-## Big-M Versiyonları
-
-### Tight Big-M (Önerilen - Production)
-| Constraint | M Değeri | Formül |
-|-----------|---------|---------|
-| C16 (Time consistency) | 56.0 | T_max - e_min + C_max |
-| C20 (Pickup-delivery) | 45.0 | T_max - e_min |
-| C22 (Waiting time) | 480.0 | T_max |
-| C24-C25 (Load flow) | 20.0 | Q_max |
-| C29 (MTZ) | 21 | \|Nw\| |
-
-**Performans (10 parça):** 287s solve time, 2.15% MIP gap, 12,458 nodes
-
-### Unified Big-M (Development/Testing)
-| Tüm Constraint'ler | M=9999 |
-|-------------------|---------|
-
-**Performans (10 parça):** 756s solve time, 2.87% MIP gap, 41,923 nodes
+`results/` ve `logs/` klasörleri `run_model.py` çalıştırıldığında otomatik oluşturulur, git'e commit edilmez.
 
 ## Kullanım
 
-### 1. Veri Hazırlama (Excel)
-```
-products.xlsx örnek:
-product_id | origin | destination | ready_time | load_time | unload_time | area_m2
-P1         | A      | B           | 07:15      | 2         | 3           | 1.5
-```
+### 1. Kurulum
 
-### 2. Model Çalıştırma
 ```bash
-# Production (Tight Big-M - Önerilen)
-python model_tight_bigm.py
-
-# Development (Unified Big-M)
-python model_unified_bigm.py
+pip install -r requirements.txt
 ```
 
-### 3. Çıktılar
-- `results/result_internal_logistics_[timestamp].xlsx`
-- `logs/terminal_output_[timestamp].txt`
-- `logs/infeasible_[timestamp].ilp` (infeasible ise IIS raporu)
+> Gurobi lisansı gerektirir (akademik lisans: gurobi.com/academia).
 
-## Gurobi Parametreleri
-```python
-TimeLimit: 600s
-MIPGap: 0.03
-Threads: 6
-Presolve: 2
+### 2. Ana MILP modeli
+
+`run_model.py`, varsayılan olarak `./inputs` klasöründen okur; farklı bir klasör için `--inputs` kullanın:
+
+```bash
+python run_model.py
+python run_model.py --inputs /baska/bir/klasor
 ```
 
-**İleri Tuning:**
-```python
-m.setParam('MIPFocus', 1)
-m.setParam('Cuts', 2)
+**Beklenen girdi dosyaları** (`inputs/` altında):
+
+| Dosya | Zorunlu sütunlar |
+|---|---|
+| `nodes.xlsx` | `node_id` (depo `h` dahil) |
+| `vehicles.xlsx` | `vehicle_id`, `capacity_m2` |
+| `products.xlsx` | `product_id`, `origin`, `destination`, `ready_time`, `load_time`, `unload_time`, `area_m2` |
+| `distances - dakika.xlsx` | `from_node`, `to_node`, `duration_min` |
+| `distances - metre.xlsx` | `from_node`, `to_node`, `duration_metre` |
+
+`nodes.xlsx` ve `products.xlsx` bu repoda **bulunmuyor** — kendi veri setinizle `inputs/` klasörüne eklemeniz gerekiyor. Eksik bir dosya varsa `run_model.py` hangi dosyanın nereye eklenmesi gerektiğini açıkça belirten bir hata verir.
+
+### 3. Solomon sezgiseli
+
+```bash
+python solomon_heuristic.py --inputs inputs
 ```
 
-## Performans Karşılaştırma
-| Instance | Tight Big-M | Unified Big-M | Improvement |
-|----------|------------|--------------|-------------|
-| 10 parça | 34s | 58s | 41% faster |
-| 20 parça | 152s | 378s | 60% faster |
+`inputs/products_4part.xlsx`, `products_5part.xlsx`, `products_6part.xlsx`, `products_10part.xlsx` dosyalarını arar (bulunamayanları atlar); çıktıları `inputs/heuristic_results/` altına yazar.
 
+### 4. NSGA-II / karşılaştırma deneyleri
 
-**Sonuç:** Tight Big-M, orta-büyük problemlerde kritik performans avantajı sağlar.
+`nsga2_experiments/` içindeki `task3_runner.py` ve `task4_runner.py`, MIP çözümünü Solomon sezgiseli ve NSGA-II ile karşılaştıran toplu deney betikleridir — her ikisi de kendi docstring'lerinde deney tasarımını (ürün sayısı/case/config ızgarası) detaylı anlatır.
 
-## Problem Skalası Limitleri
-| Parametre | Önerilen Max | Complexity |
-|-----------|-------------|------------|
-| \|P\| (parça) | 100 | O(P) |
-| \|N\| (düğüm) | 30 | O(N²) |
-| \|K\| (araç) | 5 | O(K) |
-| \|R\| (rota) | 5 | O(R) |
+### 5. `parça nu genel/` — veri hazırlama araçları
 
-**Toplam Complexity:** O(N²·K·R·P)
+Ana modelden bağımsız, `products.xlsx`'in `area_m2` sütununu geçmiş taşıma verisinden tahmin etmek için kullanılan iki yardımcı script:
 
-## Troubleshooting
+```bash
+cd "parca nu genel"
+python parca_yuzey_hacim_analizi.py   # 2025/2026 verisinden malzeme başına max yüzey alanı/hacim
+python romur_boyut_tahmini.py         # boyutu bilinmeyen parçalar için kapasite-tabanlı tahmin (masalar.xlsx gerekir, repoda yok)
+```
 
-### Infeasible Model
-1. IIS dosyasını kontrol et: `infeasible_[timestamp].ilp`
-2. `ready_time` vs. `T_max` uyumsuzluğu
-3. Kapasite yetersizliği (Σarea_m² > vehicle capacity)
+## Notlar
 
-### Slow Convergence
-1. Unified → Tight Big-M'ye geç
-2. `m.setParam('MIPFocus', 1)`
-3. Parça sayısını azalt: `products.head(10)`
-
-### Numerical Issues
-1. BIG_M değerini düşür (9999 → 500?)
-2. Parametre scaling kontrol et
+- `run_model.py`'nin çözüm süresi/gap gibi performans rakamları veri setine göre büyük ölçüde değişir; bu README artık uydurma/varsayımsal performans tabloları içermiyor — kendi veri setinizle çalıştırıp gerçek rakamları buraya siz ekleyin.
+- Sadece tek bir MILP dosyası (`run_model.py`) var; ayrı "tight Big-M" / "unified Big-M" varyantları yok.
 
 ## Key References (Operations Research)
-- **Miller et al. (1960)** - MTZ subtour elimination
-- **Solomon (1987)** - VRPTW algorithms  
-- **Camm et al. (1990)** - Cutting Big M down to size
-- **Desrochers & Laporte (1991)** - MTZ improvements
-- **Savelsbergh & Sol (1995)** - General pickup-delivery problem
 
-## Versiyon Bilgisi
-**v2.1.0 (Current)** - Tight Big-M + Unified Big-M implementation  
-**Model Complexity:** O(|N|²·|K|·|R|·|P|)  
-**License:** Academic use (Gurobi Academic License required)
+- **Miller et al. (1960)** — MTZ subtour elimination
+- **Solomon (1987)** — VRPTW algorithms
+- **Camm et al. (1990)** — Cutting Big M down to size
+- **Desrochers & Laporte (1991)** — MTZ improvements
+- **Savelsbergh & Sol (1995)** — General pickup-delivery problem
 
-**Son Güncelleme:** 4 Şubat 2026 
+## License
+
+Academic use (Gurobi Academic License required).

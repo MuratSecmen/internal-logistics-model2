@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import gurobipy as gp
 from gurobipy import GRB, quicksum
@@ -28,7 +29,6 @@ def ready_to_min(v):
         hh, mm = s.split(":"); return int(hh)*60 + int(mm)
     return int(float(s))
 
-BASE_DATE = BASE_DATE
 def minutes_to_stamp(total_min, base_dt=BASE_DATE):
     if total_min is None: return ''
     dt = base_dt + timedelta(minutes=float(total_min))
@@ -43,12 +43,28 @@ def tidy(var_values):
     return pd.DataFrame(rows)
 
 # ---------- Veri Okuma ----------
-data_path  = r"C:\Users\Asus\Desktop\Er\\"
-desktop_dir= r"C:\Users\Asus\Desktop"
+_arg_parser = argparse.ArgumentParser(description="Internal Logistics PD-VRP MILP")
+_arg_parser.add_argument("--inputs", default="inputs",
+                         help="Girdi Excel dosyalarının (nodes.xlsx, vehicles.xlsx, "
+                              "products.xlsx, distances - dakika.xlsx, "
+                              "distances - metre.xlsx) bulunduğu klasör "
+                              "(varsayılan: ./inputs)")
+args = _arg_parser.parse_args()
+data_path = args.inputs
 
-nodes     = pd.read_excel(os.path.join(data_path, "nodes.xlsx"))
-vehicles  = pd.read_excel(os.path.join(data_path, "vehicles.xlsx"))
-products  = pd.read_excel(os.path.join(data_path, "products.xlsx")).head(25)
+def _require(filename):
+    path = os.path.join(data_path, filename)
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Girdi dosyası bulunamadı: {path}\n"
+            f"'{filename}' dosyasını '{data_path}' klasörüne ekleyin, "
+            f"ya da --inputs ile doğru klasörü belirtin."
+        )
+    return path
+
+nodes     = pd.read_excel(_require("nodes.xlsx"))
+vehicles  = pd.read_excel(_require("vehicles.xlsx"))
+products  = pd.read_excel(_require("products.xlsx")).head(25)
 
 def _read_dist(path, val_col):
     df = pd.read_excel(path, sheet_name=0)
@@ -65,8 +81,8 @@ def _read_dist(path, val_col):
     return {(r['from_node'], r['to_node']): float(r[val_col]) for _, r in df.iterrows()}
 
 # Not: dist_min = dakika, dist_metre = metre
-dist_min   = _read_dist(os.path.join(data_path, "distances - dakika.xlsx"), "duration_min")
-dist_metre = _read_dist(os.path.join(data_path, "distances - metre.xlsx"),  "duration_metre")
+dist_min   = _read_dist(_require("distances - dakika.xlsx"), "duration_min")
+dist_metre = _read_dist(_require("distances - metre.xlsx"),  "duration_metre")
 
 # ---------- Kümeler / Parametreler ----------
 nodes['node_id'] = nodes['node_id'].astype(str).str.strip()
@@ -423,9 +439,11 @@ for k in K:
 timestamp   = datetime.now().strftime('%Y_%m_%d_%H_%M')
 excel_base  = f"result_of_run_{timestamp}"
 excel_dir   = 'results'
+log_dir     = 'logs'
 os.makedirs(excel_dir, exist_ok=True)
+os.makedirs(log_dir, exist_ok=True)
 excel_path  = os.path.join(excel_dir, f"{excel_base}.xlsx")
-log_path    = os.path.join(desktop_dir, f"{excel_base}.txt")
+log_path    = os.path.join(log_dir, f"{excel_base}.txt")
 
 m.setParam('TimeLimit', TIME_LIMIT)
 m.setParam('MIPGap', MIP_GAP)
