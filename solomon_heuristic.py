@@ -1,3 +1,4 @@
+import argparse
 import os
 import copy
 from datetime import datetime
@@ -6,7 +7,13 @@ import pandas as pd
 # =========================================================
 # CONFIG
 # =========================================================
-INPUT_DIR = r"C:\Users\Asus\Documents\GitHub\logistics-model2\internal-logistics-model2\inputs"
+_arg_parser = argparse.ArgumentParser(
+    description="Solomon I1 yerleştirme sezgiseli (çok parçalı senaryolar)")
+_arg_parser.add_argument("--inputs", default="inputs",
+                         help="Girdi Excel dosyalarının bulunduğu klasör "
+                              "(varsayılan: ./inputs)")
+_args = _arg_parser.parse_args()
+INPUT_DIR = _args.inputs
 
 FILES = [
     "products_4part.xlsx",

@@ -12,6 +12,7 @@ Kullanım:
 Dosya yollarını aşağıdaki DEĞİŞKENLERDEN güncelleyebilirsiniz.
 """
 
+import os
 import pandas as pd
 import openpyxl
 import warnings
@@ -24,12 +25,14 @@ warnings.filterwarnings('ignore')
 # ▶ KULLANICI AYARLARI — sadece bu bölümü düzenleyin
 # ════════════════════════════════════════════════════════════
 
-# Excel dosyalarının tam yolu (kendi bilgisayarınıza göre güncelleyin)
-F25 = r"C:\Users\KULLANICI\Desktop\2025_parça_detayları.xlsx"
-F26 = r"C:\Users\KULLANICI\Desktop\2026_taşınan_parça_nu_s.xlsx"
+# Varsayılan olarak bu script ile aynı klasördeki dosyalar kullanılır.
+# Farklı bir konum kullanmak isterseniz aşağıdaki üç satırı güncelleyin.
+_here = os.path.dirname(os.path.abspath(__file__))
+F25 = os.path.join(_here, "2025_parça detayları.xlsx")
+F26 = os.path.join(_here, "2026_taşınan parça nu.s.xlsx")
 
 # Çıktı dosyasının kaydedileceği yer
-OUT = r"C:\Users\KULLANICI\Desktop\parca_yuzey_hacim_analizi.xlsx"
+OUT = os.path.join(_here, "parca_yuzey_hacim_analizi.xlsx")
 
 # ── Birim ayarları ──────────────────────────────────────────
 # Amerikalı projeler (inç kullananlar) — GAGE=0.032 kanıtıyla tespit edildi

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+results/
+logs/
+nsga2_experiments/*.xlsx
+!nsga2_experiments/NSGA2_BilgiNotlari.xlsx
+parca nu genel/*.xlsx
+!parca nu genel/2025_parça detayları.xlsx
+!parca nu genel/2026_taşınan parça nu.s.xlsx
+.env

@@ -26,6 +26,7 @@ Kullanım:
   python romur_boyut_tahmini.py
 """
 
+import os
 import pandas as pd
 import numpy as np
 import openpyxl
@@ -39,10 +40,14 @@ warnings.filterwarnings('ignore')
 # ▶ KULLANICI AYARLARI
 # ════════════════════════════════════════════════════════════
 
-F_MASALAR = r"320420masalar.xlsx"
-F_2025    = r"2025_parça_detayları.xlsx"
-F_2026    = r"2026_taşınan_parça_nu_s.xlsx"
-OUT       = r"romur_boyut_tahmini.xlsx"
+_here = os.path.dirname(os.path.abspath(__file__))
+
+# NOT: masalar.xlsx bu repoda yok — ARACID/TESLIM_ETME_TARIHI/TEBINA/
+# MOVE_ORDER_DETAIL_NO içeren gerçek operasyonel veriyi siz eklemelisiniz.
+F_MASALAR = os.path.join(_here, "320420masalar.xlsx")
+F_2025    = os.path.join(_here, "2025_parça detayları.xlsx")
+F_2026    = os.path.join(_here, "2026_taşınan parça nu.s.xlsx")
+OUT       = os.path.join(_here, "romur_boyut_tahmini.xlsx")
 
 ROMUR_KAPASITE_M2 = 20          # romur / taşıma aracı kapasitesi
 ROMUR_KAPASITE_CM2 = ROMUR_KAPASITE_M2 * 10_000   # 200 000 cm²
